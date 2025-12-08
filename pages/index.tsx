@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { db, Match, createMatch } from '../lib/db';
+import { db, Match, createMatch } from '@/lib/db';
 import Link from 'next/link';
 
 export default function Home() {
@@ -10,6 +10,8 @@ export default function Home() {
   const [newMatchName, setNewMatchName] = useState('');
   const [judgeNames, setJudgeNames] = useState('');
   const [contestantNames, setContestantNames] = useState('');
+  const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
+  const [deleteConfirmCount, setDeleteConfirmCount] = useState(0);
 
   useEffect(() => {
     loadMatches();
@@ -37,29 +39,47 @@ export default function Home() {
     router.push(`/match/${matchId}`);
   };
 
-  const handleDeleteMatch = async (matchId: number) => {
-    if (!confirm('确定要删除这个比赛吗？')) return;
+  const handleDeleteClick = (match: Match) => {
+    setMatchToDelete(match);
+    setDeleteConfirmCount(0);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!matchToDelete || !matchToDelete.id) return;
+    
+    // First click - show warning
+    if (deleteConfirmCount === 0) {
+      setDeleteConfirmCount(1);
+      return;
+    }
+    
+    // Second click - actually delete
+    const matchId = matchToDelete.id;
     await db.matches.delete(matchId);
     await db.scores.where('matchId').equals(matchId).delete();
     await db.history.where('matchId').equals(matchId).delete();
+    setMatchToDelete(null);
+    setDeleteConfirmCount(0);
     loadMatches();
+  };
+
+  const handleCancelDelete = () => {
+    setMatchToDelete(null);
+    setDeleteConfirmCount(0);
   };
 
   return (
     <div className="container">
       <div style={{ textAlign: 'center', marginBottom: '40px', paddingTop: '40px' }}>
         <h1 style={{ fontSize: '48px', marginBottom: '16px', textShadow: '2px 2px 4px rgba(0,0,0,0.2)' }}>
-          🏆 比赛管理系统
+          Genesis Tribe
         </h1>
-        <p style={{ fontSize: '20px', opacity: 0.9 }}>
-          浏览器端 OCR + AI 自动评分
-        </p>
       </div>
 
       <div className="card">
         <div className="flex-between mb-3">
-          <h2 style={{ margin: 0, color: 'var(--dark)' }}>比赛列表</h2>
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+          <h2 style={{ margin: 0, color: 'var(--dark)' }}>🏆比赛列表</h2>
+          <button className="btn btn-special" onClick={() => setShowCreateModal(true)}>
             + 创建比赛
           </button>
         </div>
@@ -86,7 +106,7 @@ export default function Home() {
                   </Link>
                   <button
                     className="btn btn-outline"
-                    onClick={() => handleDeleteMatch(match.id!)}
+                    onClick={() => handleDeleteClick(match)}
                     style={{ fontSize: '14px', padding: '8px 16px' }}
                   >
                     删除
@@ -115,7 +135,7 @@ export default function Home() {
                   type="text"
                   value={newMatchName}
                   onChange={e => setNewMatchName(e.target.value)}
-                  placeholder="例如：2024 年度比赛"
+                  placeholder="例如：年度比赛"
                 />
               </div>
               <div style={{ marginBottom: '16px' }}>
@@ -132,7 +152,7 @@ export default function Home() {
               </div>
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
-                  选手名称（用逗号或换行分隔）
+                  选手名称（用逗号或换行分隔, 可先不填写）
                 </label>
                 <textarea
                   className="input"
@@ -146,8 +166,60 @@ export default function Home() {
                 <button className="btn btn-outline" onClick={() => setShowCreateModal(false)}>
                   取消
                 </button>
-                <button className="btn btn-primary" onClick={handleCreateMatch}>
+                <button className="btn btn-special" onClick={handleCreateMatch}>
                   创建
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {matchToDelete && (
+        <div className="modal-overlay" onClick={handleCancelDelete}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">确认删除</h2>
+              <button className="modal-close" onClick={handleCancelDelete}>×</button>
+            </div>
+            <div>
+              {deleteConfirmCount === 0 ? (
+                <>
+                  <p style={{ marginBottom: '16px', color: '#666', fontSize: '16px' }}>
+                    您确定要删除比赛 <strong style={{ color: 'var(--dark)' }}>"{matchToDelete.name}"</strong> 吗？
+                  </p>
+                  <p style={{ marginBottom: '24px', color: '#999', fontSize: '14px' }}>
+                    此操作将永久删除该比赛及其所有评分数据，且无法恢复。
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ marginBottom: '16px', color: '#ff6b6b', fontSize: '18px', fontWeight: 600 }}>
+                    ⚠️ 最后确认
+                  </p>
+                  <p style={{ marginBottom: '16px', color: '#666', fontSize: '16px' }}>
+                    您即将永久删除比赛 <strong style={{ color: 'var(--dark)' }}>"{matchToDelete.name}"</strong>
+                  </p>
+                  <p style={{ marginBottom: '24px', color: '#ff6b6b', fontSize: '14px', fontWeight: 600 }}>
+                    此操作无法撤销！请再次点击确认删除按钮。
+                  </p>
+                </>
+              )}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline" onClick={handleCancelDelete}>
+                  取消
+                </button>
+                <button 
+                  className="btn btn-outline" 
+                  onClick={handleConfirmDelete}
+                  style={{ 
+                    background: deleteConfirmCount === 0 ? 'rgba(255, 107, 107, 0.15)' : 'rgba(255, 107, 107, 0.3)',
+                    borderColor: deleteConfirmCount === 0 ? 'rgba(255, 107, 107, 0.4)' : 'rgba(255, 107, 107, 0.8)',
+                    color: deleteConfirmCount === 0 ? 'var(--dark)' : '#ff6b6b',
+                    fontWeight: deleteConfirmCount === 1 ? 700 : 600
+                  }}
+                >
+                  {deleteConfirmCount === 0 ? '确认删除' : '最后确认删除'}
                 </button>
               </div>
             </div>

@@ -50,7 +50,7 @@ competition-admin/
 
 示例调用：
 
-import { runOCR } from '../lib/ocr'
+import { runOCR } from '@/lib/ocr'
 
 const text = await runOCR(uploadedFile)
 console.log('OCR 结果：', text)
@@ -138,11 +138,3 @@ npm run dev
         •        Excel 导出可自定义模板
         •        支持多比赛、多历史记录管理
 
-⸻
-
-6. 总结
-        •        该模板是 Cursor-ready，可快速部署或直接运行在浏览器
-        •        浏览器端 OCR + AI 操作 + 本地 DB 架构，确保 轻量、可靠、易用
-        •        Customer 可以据此进行技术战略规划，扩展 AI 功能或 UI 风格
-
-⸻
