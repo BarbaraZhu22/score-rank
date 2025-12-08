@@ -27,6 +27,9 @@ COPY . .
 # 注意：环境变量 DEEPSEEK_API_KEY 应该在运行时通过云平台的环境变量配置传入
 # 不需要在构建时传入，因为 API 调用是在运行时进行的
 
+# 确保 public 目录存在（Next.js 需要，即使为空）
+RUN mkdir -p public
+
 # 禁用 Next.js 遥测
 ENV NEXT_TELEMETRY_DISABLED 1
 
@@ -44,8 +47,8 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# 复制必要的文件
-COPY --from=builder /app/public ./public
+# 复制必要的文件（public 目录在 builder 阶段已确保存在）
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # 复制 standalone 输出
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
