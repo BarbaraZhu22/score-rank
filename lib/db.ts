@@ -37,7 +37,16 @@ class CompetitionDatabase extends Dexie {
   constructor() {
     super('CompetitionDB');
     
+    // Version 1: Initial schema
     this.version(1).stores({
+      matches: '++id, name, createdAt, updatedAt',
+      scores: '++id, matchId, contestant, judge, [matchId+contestant+judge], updatedAt',
+      history: '++id, matchId, timestamp'
+    });
+
+    // Version 2: Added contestantNumbers support (no schema change needed, it's stored as JSON)
+    // This version bump ensures schema consistency
+    this.version(2).stores({
       matches: '++id, name, createdAt, updatedAt',
       scores: '++id, matchId, contestant, judge, [matchId+contestant+judge], updatedAt',
       history: '++id, matchId, timestamp'

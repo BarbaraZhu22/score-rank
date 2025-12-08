@@ -10,6 +10,7 @@ interface TableViewProps {
   scores: Score[];
   contestantNumbers?: Record<string, string>;
   onUpdate: () => void;
+  onBeforeUpdate?: () => Promise<void>;
   children?: React.ReactNode;
 }
 
@@ -23,11 +24,12 @@ interface EditingRow {
 
 export default function TableView({
   matchId,
-  judges,
-  contestants,
-  scores,
+  judges = [],
+  contestants = [],
+  scores = [],
   contestantNumbers = {},
   onUpdate,
+  onBeforeUpdate,
   children,
 }: TableViewProps) {
   const [editingCell, setEditingCell] = useState<{
@@ -45,20 +47,38 @@ export default function TableView({
 
   // Create a map for quick score lookup
   const scoreMap = useMemo(() => {
-    const map = new Map<string, number | null>();
-    scores.forEach((score) => {
-      const key = `${score.contestant}|${score.judge}`;
-      map.set(key, score.value);
-    });
-    return map;
+    try {
+      const map = new Map<string, number | null>();
+      if (Array.isArray(scores)) {
+        scores.forEach((score) => {
+          if (score && score.contestant && score.judge) {
+            const key = `${score.contestant}|${score.judge}`;
+            map.set(key, score.value ?? null);
+          }
+        });
+      }
+      return map;
+    } catch (error) {
+      console.error("Error creating score map:", error);
+      return new Map<string, number | null>();
+    }
   }, [scores]);
 
   // Generate unique keys for contestants
   const contestantKeys = useMemo(() => {
-    return contestants.map((name, index) => {
-      const random = Math.random().toString(36).substring(2, 9);
-      return `${index}_${name}_${random}`;
-    });
+    try {
+      if (!Array.isArray(contestants)) {
+        return [];
+      }
+      return contestants.map((name, index) => {
+        const safeName = String(name || "");
+        const random = Math.random().toString(36).substring(2, 9);
+        return `${index}_${safeName}_${random}`;
+      });
+    } catch (error) {
+      console.error("Error generating contestant keys:", error);
+      return [];
+    }
   }, [contestants]);
 
   // Sort contestants based on sortColumn and sortDirection
@@ -164,11 +184,20 @@ export default function TableView({
 
   // Update contestantKeys for sorted contestants
   const sortedContestantKeys = useMemo(() => {
-    return sortedContestants.map((name, index) => {
-      const originalIndex = contestants.indexOf(name);
-      const random = Math.random().toString(36).substring(2, 9);
-      return `${originalIndex}_${name}_${random}`;
-    });
+    try {
+      if (!Array.isArray(sortedContestants) || !Array.isArray(contestants)) {
+        return [];
+      }
+      return sortedContestants.map((name, index) => {
+        const safeName = String(name || "");
+        const originalIndex = contestants.indexOf(name);
+        const random = Math.random().toString(36).substring(2, 9);
+        return `${originalIndex >= 0 ? originalIndex : index}_${safeName}_${random}`;
+      });
+    } catch (error) {
+      console.error("Error generating sorted contestant keys:", error);
+      return [];
+    }
   }, [sortedContestants, contestants]);
 
   const getScore = (contestant: string, judge: string): number | null => {
@@ -184,42 +213,65 @@ export default function TableView({
   const handleCellBlur = async () => {
     if (!editingCell) return;
 
-    const numValue = editValue.trim() === "" ? null : parseFloat(editValue);
+    try {
+      const numValue = editValue.trim() === "" ? null : parseFloat(editValue);
 
-    if (
-      numValue !== null &&
-      (isNaN(numValue) || numValue < 0 || numValue > 100)
-    ) {
-      alert("请输入有效的分数 (0-100)");
+      if (
+        numValue !== null &&
+        (isNaN(numValue) || numValue < 0 || numValue > 100)
+      ) {
+        alert("请输入有效的分数 (0-100)");
+        setEditingCell(null);
+        return;
+      }
+
+      // Update score in database
+      const existingScore = Array.isArray(scores)
+        ? scores.find(
+            (s) =>
+              s &&
+              s.contestant === editingCell.contestant &&
+              s.judge === editingCell.judge
+          )
+        : null;
+
+      const now = Date.now();
+      if (existingScore && existingScore.id) {
+        await db.scores.update(existingScore.id, {
+          value: numValue,
+          updatedAt: now,
+        });
+      } else {
+        await db.scores.add({
+          matchId,
+          contestant: editingCell.contestant,
+          judge: editingCell.judge,
+          value: numValue,
+          updatedAt: now,
+        });
+      }
+
+      await db.matches.update(matchId, { updatedAt: now });
       setEditingCell(null);
-      return;
+      if (onBeforeUpdate) {
+        try {
+          await onBeforeUpdate();
+        } catch (error) {
+          console.error("Error in onBeforeUpdate:", error);
+        }
+      }
+      if (onUpdate) {
+        try {
+          onUpdate();
+        } catch (error) {
+          console.error("Error in onUpdate:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving cell:", error);
+      alert("保存失败，请重试");
+      setEditingCell(null);
     }
-
-    // Update score in database
-    const existingScore = scores.find(
-      (s) =>
-        s.contestant === editingCell.contestant && s.judge === editingCell.judge
-    );
-
-    const now = Date.now();
-    if (existingScore) {
-      await db.scores.update(existingScore.id!, {
-        value: numValue,
-        updatedAt: now,
-      });
-    } else {
-      await db.scores.add({
-        matchId,
-        contestant: editingCell.contestant,
-        judge: editingCell.judge,
-        value: numValue,
-        updatedAt: now,
-      });
-    }
-
-    await db.matches.update(matchId, { updatedAt: now });
-    setEditingCell(null);
-    onUpdate();
   };
 
   const handleCellKeyDown = (e: React.KeyboardEvent) => {
@@ -231,53 +283,104 @@ export default function TableView({
   };
 
   const calculateTotal = (contestant: string): number => {
-    let sum = 0;
-    let count = 0;
-    judges.forEach((judge) => {
-      const score = getScore(contestant, judge);
-      if (score !== null) {
-        sum += score;
-        count++;
+    try {
+      if (!contestant || !Array.isArray(judges)) {
+        return 0;
       }
-    });
-    return count > 0 ? sum : 0;
+      let sum = 0;
+      let count = 0;
+      judges.forEach((judge) => {
+        try {
+          const score = getScore(contestant, judge);
+          if (score !== null && !isNaN(score) && isFinite(score)) {
+            sum += score;
+            count++;
+          }
+        } catch (error) {
+          console.error(`Error getting score for ${contestant}/${judge}:`, error);
+        }
+      });
+      return count > 0 ? sum : 0;
+    } catch (error) {
+      console.error(`Error calculating total for ${contestant}:`, error);
+      return 0;
+    }
   };
 
   const calculateAverage = (contestant: string): number => {
-    const total = calculateTotal(contestant);
-    const count = judges.filter(
-      (judge) => getScore(contestant, judge) !== null
-    ).length;
-    return count > 0 ? total / count : 0;
+    try {
+      if (!contestant || !Array.isArray(judges)) {
+        return 0;
+      }
+      const total = calculateTotal(contestant);
+      const count = judges.filter((judge) => {
+        try {
+          return getScore(contestant, judge) !== null;
+        } catch (error) {
+          return false;
+        }
+      }).length;
+      return count > 0 && isFinite(total / count) ? total / count : 0;
+    } catch (error) {
+      console.error(`Error calculating average for ${contestant}:`, error);
+      return 0;
+    }
   };
 
   const handleExportExcel = () => {
-    // Prepare data for Excel
-    const data: any[][] = [];
+    try {
+      // Prepare data for Excel
+      const data: any[][] = [];
 
-    // Header row
-    const headerRow = ["海选号", "选手", ...judges, "总分", "平均分"];
-    data.push(headerRow);
+      // Header row
+      const headerRow = ["海选号", "选手", ...(Array.isArray(judges) ? judges : []), "总分", "平均分"];
+      data.push(headerRow);
 
-    // Data rows - use sortedContestants to maintain sort order
-    sortedContestants.forEach((contestant) => {
-      const row = [contestantNumbers[contestant] || "", contestant];
-      judges.forEach((judge) => {
-        const score = getScore(contestant, judge);
-        row.push(score !== null ? score + "" : "");
-      });
-      row.push(calculateTotal(contestant).toFixed(2));
-      row.push(calculateAverage(contestant).toFixed(2));
-      data.push(row);
-    });
+      // Data rows - use sortedContestants to maintain sort order
+      if (Array.isArray(sortedContestants)) {
+        sortedContestants.forEach((contestant) => {
+          try {
+            const safeContestant = String(contestant || "");
+            const row = [
+              (contestantNumbers && contestantNumbers[safeContestant]) || "",
+              safeContestant,
+            ];
+            if (Array.isArray(judges)) {
+              judges.forEach((judge) => {
+                try {
+                  const score = getScore(safeContestant, judge);
+                  row.push(score !== null ? String(score) : "");
+                } catch (error) {
+                  console.error(`Error getting score for ${safeContestant}/${judge}:`, error);
+                  row.push("");
+                }
+              });
+            }
+            try {
+              row.push(calculateTotal(safeContestant).toFixed(2));
+              row.push(calculateAverage(safeContestant).toFixed(2));
+            } catch (error) {
+              console.error(`Error calculating totals for ${safeContestant}:`, error);
+              row.push("0.00", "0.00");
+            }
+            data.push(row);
+          } catch (error) {
+            console.error(`Error processing contestant ${contestant}:`, error);
+          }
+        });
+      }
 
-    // Create workbook and worksheet
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, "评分表");
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, "评分表");
 
-    // Export
-    XLSX.writeFile(wb, `比赛评分表_${Date.now()}.xlsx`);
+      // Export
+      XLSX.writeFile(wb, `比赛评分表_${Date.now()}.xlsx`);
+    } catch (error) {
+      console.error("Error exporting Excel:", error);
+      alert("导出失败，请重试");
+    }
   };
 
   const handleNumberDoubleClick = (contestant: string) => {
@@ -288,23 +391,48 @@ export default function TableView({
   const handleNumberBlur = async () => {
     if (editingNumber === null) return;
 
-    const match = await db.matches.get(matchId);
-    if (!match) return;
+    try {
+      const match = await db.matches.get(matchId);
+      if (!match) {
+        alert("比赛数据不存在");
+        setEditingNumber(null);
+        setEditNumberValue("");
+        return;
+      }
 
-    const now = Date.now();
-    const updatedNumbers = {
-      ...(match.contestantNumbers || {}),
-      [editingNumber]: editNumberValue.trim(),
-    };
+      const now = Date.now();
+      const updatedNumbers = {
+        ...(match.contestantNumbers || {}),
+        [editingNumber]: editNumberValue.trim(),
+      };
 
-    await db.matches.update(matchId, {
-      contestantNumbers: updatedNumbers,
-      updatedAt: now,
-    });
+      await db.matches.update(matchId, {
+        contestantNumbers: updatedNumbers,
+        updatedAt: now,
+      });
 
-    setEditingNumber(null);
-    setEditNumberValue("");
-    onUpdate();
+      setEditingNumber(null);
+      setEditNumberValue("");
+      if (onBeforeUpdate) {
+        try {
+          await onBeforeUpdate();
+        } catch (error) {
+          console.error("Error in onBeforeUpdate:", error);
+        }
+      }
+      if (onUpdate) {
+        try {
+          onUpdate();
+        } catch (error) {
+          console.error("Error in onUpdate:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving number:", error);
+      alert("保存失败，请重试");
+      setEditingNumber(null);
+      setEditNumberValue("");
+    }
   };
 
   const handleNumberKeyDown = (e: React.KeyboardEvent) => {
@@ -317,43 +445,68 @@ export default function TableView({
   };
 
   const handleAddNewRow = () => {
-    const initialScores: Record<string, string> = {};
-    judges.forEach((judge) => {
-      initialScores[judge] = "";
-    });
-    setEditingRow({
-      contestant: "",
-      number: "",
-      scores: initialScores,
-      isNew: true,
-    });
+    try {
+      const initialScores: Record<string, string> = {};
+      if (Array.isArray(judges)) {
+        judges.forEach((judge) => {
+          initialScores[judge] = "";
+        });
+      }
+      setEditingRow({
+        contestant: "",
+        number: "",
+        scores: initialScores,
+        isNew: true,
+      });
+    } catch (error) {
+      console.error("Error adding new row:", error);
+      alert("添加失败，请重试");
+    }
   };
 
   const handleEditRow = (contestant: string) => {
-    const initialScores: Record<string, string> = {};
-    judges.forEach((judge) => {
-      const score = getScore(contestant, judge);
-      initialScores[judge] = score !== null ? score.toString() : "";
-    });
-    setEditingRow({
-      contestant,
-      number: contestantNumbers[contestant] || "",
-      scores: initialScores,
-      isNew: false,
-      originalName: contestant,
-    });
+    try {
+      const safeContestant = String(contestant || "");
+      const initialScores: Record<string, string> = {};
+      if (Array.isArray(judges)) {
+        judges.forEach((judge) => {
+          try {
+            const score = getScore(safeContestant, judge);
+            initialScores[judge] = score !== null ? score.toString() : "";
+          } catch (error) {
+            console.error(`Error getting score for ${safeContestant}/${judge}:`, error);
+            initialScores[judge] = "";
+          }
+        });
+      }
+      setEditingRow({
+        contestant: safeContestant,
+        number: (contestantNumbers && contestantNumbers[safeContestant]) || "",
+        scores: initialScores,
+        isNew: false,
+        originalName: safeContestant,
+      });
+    } catch (error) {
+      console.error("Error editing row:", error);
+      alert("编辑失败，请重试");
+    }
   };
 
   const handleRowSave = async () => {
     if (!editingRow) return;
 
-    if (!editingRow.contestant.trim()) {
-      alert("请输入选手名称");
-      return;
-    }
+    try {
+      if (!editingRow.contestant || !editingRow.contestant.trim()) {
+        alert("请输入选手名称");
+        return;
+      }
 
-    const match = await db.matches.get(matchId);
-    if (!match) return;
+      const match = await db.matches.get(matchId);
+      if (!match) {
+        alert("比赛数据不存在");
+        setEditingRow(null);
+        return;
+      }
 
     const now = Date.now();
     const contestantName = editingRow.contestant.trim();
@@ -387,6 +540,14 @@ export default function TableView({
         [contestantName]: editingRow.number.trim(),
       };
 
+      if (onBeforeUpdate) {
+        try {
+          await onBeforeUpdate();
+        } catch (error) {
+          console.error("Error in onBeforeUpdate:", error);
+        }
+      }
+
       await db.matches.update(matchId, {
         contestants: updatedContestants,
         contestantNumbers: updatedNumbers,
@@ -409,6 +570,14 @@ export default function TableView({
       // Update existing contestant
       const oldName = editingRow.originalName!;
       const newName = contestantName;
+
+      if (onBeforeUpdate) {
+        try {
+          await onBeforeUpdate();
+        } catch (error) {
+          console.error("Error in onBeforeUpdate:", error);
+        }
+      }
 
       if (oldName !== newName) {
         // Name changed, need to update all references
@@ -508,10 +677,21 @@ export default function TableView({
           }
         }
       }
-    }
+      }
 
-    setEditingRow(null);
-    onUpdate();
+      setEditingRow(null);
+      if (onUpdate) {
+        try {
+          onUpdate();
+        } catch (error) {
+          console.error("Error in onUpdate:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving row:", error);
+      alert("保存失败，请重试");
+      // Don't close the dialog on error so user can retry
+    }
   };
 
   const handleRowCancel = () => {
@@ -527,10 +707,28 @@ export default function TableView({
       return;
     }
 
-    await applyActions(matchId, [
-      { type: "removeContestant", name: contestant },
-    ]);
-    onUpdate();
+    try {
+      if (onBeforeUpdate) {
+        try {
+          await onBeforeUpdate();
+        } catch (error) {
+          console.error("Error in onBeforeUpdate:", error);
+        }
+      }
+      await applyActions(matchId, [
+        { type: "removeContestant", name: contestant },
+      ]);
+      if (onUpdate) {
+        try {
+          onUpdate();
+        } catch (error) {
+          console.error("Error in onUpdate:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting contestant:", error);
+      alert("删除失败，请重试");
+    }
   };
 
   const handleSort = (column: "number" | "total" | "average") => {
@@ -863,13 +1061,14 @@ export default function TableView({
           </thead>
           <tbody>
             {sortedContestants.map((contestant, index) => {
-              const uniqueKey = sortedContestantKeys[index];
+              const uniqueKey = sortedContestantKeys[index] || `fallback_${index}_${contestant}`;
               const isEven = index % 2 === 0;
+              const safeContestant = String(contestant || "");
 
               return (
                 <tr
                   key={uniqueKey}
-                  onClick={() => handleEditRow(contestant)}
+                  onClick={() => handleEditRow(safeContestant)}
                   style={{
                     cursor: "pointer",
                     background: isEven
@@ -881,7 +1080,7 @@ export default function TableView({
                     className="editable"
                     onDoubleClick={(e) => {
                       e.stopPropagation();
-                      handleNumberDoubleClick(contestant);
+                      handleNumberDoubleClick(safeContestant);
                     }}
                     style={{
                       minWidth: "5rem",
@@ -891,7 +1090,7 @@ export default function TableView({
                           : "transparent",
                     }}
                   >
-                    {editingNumber === contestant ? (
+                    {editingNumber === safeContestant ? (
                       <input
                         type="text"
                         value={editNumberValue}
@@ -908,11 +1107,11 @@ export default function TableView({
                         }}
                       />
                     ) : (
-                      contestantNumbers[contestant] || "-"
+                      (contestantNumbers && contestantNumbers[safeContestant]) || "-"
                     )}
                   </td>
                   <td style={{ fontWeight: 600, position: "relative" }}>
-                    {contestant}
+                    {safeContestant}
                     {sortColumn && sortDirection && (
                       <span
                         style={{
@@ -934,12 +1133,19 @@ export default function TableView({
                       </span>
                     )}
                   </td>
-                  {judges.map((judge) => {
+                  {Array.isArray(judges) && judges.map((judge) => {
+                    const safeJudge = String(judge || "");
                     const isEditingCell =
-                      editingCell?.contestant === contestant &&
-                      editingCell?.judge === judge;
-                    const score = getScore(contestant, judge);
-                    const isEmpty = score === null;
+                      editingCell?.contestant === safeContestant &&
+                      editingCell?.judge === safeJudge;
+                    let score: number | null = null;
+                    let isEmpty = true;
+                    try {
+                      score = getScore(safeContestant, safeJudge);
+                      isEmpty = score === null;
+                    } catch (error) {
+                      console.error(`Error getting score for ${safeContestant}/${safeJudge}:`, error);
+                    }
 
                     return (
                       <td
@@ -947,7 +1153,7 @@ export default function TableView({
                         className={`editable ${isEmpty ? "empty" : ""}`}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
-                          handleCellDoubleClick(contestant, judge);
+                          handleCellDoubleClick(safeContestant, safeJudge);
                         }}
                       >
                         {isEditingCell ? (
@@ -983,7 +1189,13 @@ export default function TableView({
                           : "transparent",
                     }}
                   >
-                    {calculateTotal(contestant).toFixed(2)}
+                    {(() => {
+                      try {
+                        return calculateTotal(safeContestant).toFixed(2);
+                      } catch (error) {
+                        return "0.00";
+                      }
+                    })()}
                   </td>
                   <td
                     style={{
@@ -994,13 +1206,19 @@ export default function TableView({
                           : "transparent",
                     }}
                   >
-                    {calculateAverage(contestant).toFixed(2)}
+                    {(() => {
+                      try {
+                        return calculateAverage(safeContestant).toFixed(2);
+                      } catch (error) {
+                        return "0.00";
+                      }
+                    })()}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteContestant(contestant);
+                        handleDeleteContestant(safeContestant);
                       }}
                       style={{
                         background: "none",
