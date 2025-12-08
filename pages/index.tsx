@@ -28,8 +28,14 @@ export default function Home() {
       return;
     }
 
-    const judgeList = judgeNames.split(/[,\n]/).map(s => s.trim()).filter(s => s);
-    const contestantList = contestantNames.split(/[,\n]/).map(s => s.trim()).filter(s => s);
+    // Support both Chinese comma (，) and English comma (,)
+    const judgeList = judgeNames.split(/[，,\n]/).map(s => s.trim()).filter(s => s);
+    const contestantList = contestantNames.split(/[，,\n]/).map(s => s.trim()).filter(s => s);
+
+    if (judgeList.length === 0) {
+      alert('请输入至少一个裁判名称');
+      return;
+    }
 
     const matchId = await createMatch(newMatchName, judgeList, contestantList);
     setShowCreateModal(false);
@@ -140,7 +146,7 @@ export default function Home() {
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
-                  裁判名称（用逗号或换行分隔）
+                  裁判名称（用逗号或换行分隔）*
                 </label>
                 <textarea
                   className="input"
@@ -148,6 +154,7 @@ export default function Home() {
                   value={judgeNames}
                   onChange={e => setJudgeNames(e.target.value)}
                   placeholder="例如：Judge A, Judge B, Judge C"
+                  required
                 />
               </div>
               <div style={{ marginBottom: '24px' }}>

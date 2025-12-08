@@ -67,7 +67,7 @@ export default function AiPrompt({ matchData, onActionsGenerated, onClose }: AiP
         <div>
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
-              上传图片（OCR 识别）
+              上传图片
             </label>
             <input
               type="file"

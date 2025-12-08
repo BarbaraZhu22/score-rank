@@ -6,6 +6,7 @@ export interface Match {
   name: string;
   judges: string[];
   contestants: string[];
+  contestantNumbers?: Record<string, string>; // Map contestant name to audition number
   createdAt: number;
   updatedAt: number;
 }

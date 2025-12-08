@@ -4,6 +4,7 @@ import { db, Match, Score } from './db';
 export type Action =
   | { type: 'updateScore'; contestant: string; judge: string; value: number | null }
   | { type: 'addContestant'; name: string }
+  | { type: 'removeContestant'; name: string }
   | { type: 'addJudge'; name: string }
   | { type: 'recalc' };
 
@@ -68,6 +69,40 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
           timestamp: now,
         });
       }
+      break;
+    }
+
+    case 'removeContestant': {
+      const updatedContestants = match.contestants.filter(c => c !== action.name);
+      await db.matches.update(matchId, {
+        contestants: updatedContestants,
+        updatedAt: now,
+      });
+
+      // Remove all scores for this contestant
+      const scoresToDelete = await db.scores
+        .where('matchId')
+        .equals(matchId)
+        .filter(score => score.contestant === action.name)
+        .toArray();
+      await Promise.all(scoresToDelete.map(score => db.scores.delete(score.id!)));
+
+      // Update contestantNumbers if exists
+      if (match.contestantNumbers && match.contestantNumbers[action.name]) {
+        const updatedNumbers = { ...match.contestantNumbers };
+        delete updatedNumbers[action.name];
+        await db.matches.update(matchId, {
+          contestantNumbers: updatedNumbers,
+        });
+      }
+
+      // Record in history
+      await db.history.add({
+        matchId,
+        action: 'removeContestant',
+        data: action,
+        timestamp: now,
+      });
       break;
     }
 

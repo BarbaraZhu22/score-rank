@@ -94,6 +94,7 @@ export default function MatchDetail() {
         judges={matchData.judges}
         contestants={matchData.contestants}
         scores={matchData.scores}
+        contestantNumbers={matchData.match.contestantNumbers}
         onUpdate={loadMatchData}
       >
         <div
