@@ -259,8 +259,8 @@ export default function TableView({
     const headerRow = ["海选号", "选手", ...judges, "总分", "平均分"];
     data.push(headerRow);
 
-    // Data rows
-    contestants.forEach((contestant) => {
+    // Data rows - use sortedContestants to maintain sort order
+    sortedContestants.forEach((contestant) => {
       const row = [contestantNumbers[contestant] || "", contestant];
       judges.forEach((judge) => {
         const score = getScore(contestant, judge);
@@ -911,7 +911,29 @@ export default function TableView({
                       contestantNumbers[contestant] || "-"
                     )}
                   </td>
-                  <td style={{ fontWeight: 600 }}>{contestant}</td>
+                  <td style={{ fontWeight: 600, position: "relative" }}>
+                    {contestant}
+                    {sortColumn && sortDirection && (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "1.5rem",
+                          height: "1.5rem",
+                          borderRadius: "50%",
+                          background: "rgba(207, 182, 231, 1)",
+                          color: "#000",
+                          fontSize: "0.75rem",
+                          fontWeight: "bold",
+                          marginLeft: "0.5rem",
+                          float: "right",
+                        }}
+                      >
+                        {index + 1}
+                      </span>
+                    )}
+                  </td>
                   {judges.map((judge) => {
                     const isEditingCell =
                       editingCell?.contestant === contestant &&
