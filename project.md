@@ -29,7 +29,7 @@ competition-admin/
 │  └─ ConfirmModal.tsx    # AI 变更确认弹窗
 ├─ lib/
 │  ├─ db.ts               # Dexie 数据库封装
-│  ├─ actions.ts          # Action handler（updateScore / addContestant / recalc）
+│  ├─ actions.ts          # Action handler（updateScore / addContestant / updateContestantNumber）
 │  ├─ ai.ts               # DeepSeek API stub（可替换成真实 endpoint）
 │  └─ ocr.ts              # 浏览器端 OCR 封装（tesseract.js）
 ├─ styles/

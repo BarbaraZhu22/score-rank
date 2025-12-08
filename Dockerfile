@@ -22,10 +22,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# 设置环境变量（构建时）
-# Next.js 在构建时需要知道这些环境变量
-ARG DEEPSEEK_API_KEY
-ENV DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY
+# 注意：环境变量 DEEPSEEK_API_KEY 应该在运行时通过云平台的环境变量配置传入
+# 不需要在构建时传入，因为 API 调用是在运行时进行的
 
 # 禁用 Next.js 遥测
 ENV NEXT_TELEMETRY_DISABLED 1
@@ -46,8 +44,10 @@ RUN adduser --system --uid 1001 nextjs
 
 # 复制必要的文件
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+
+# 复制 standalone 输出
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
@@ -55,6 +55,11 @@ EXPOSE 3000
 
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
+
+# 注意：环境变量 DEEPSEEK_API_KEY 需要在运行时通过云平台的环境变量配置传入
+# 云平台会自动将环境变量注入到容器运行时环境中
+# 如果使用 docker run，使用: docker run -e DEEPSEEK_API_KEY=your_key ...
+# 如果使用 docker-compose，环境变量会从 .env 文件或环境变量中读取
 
 # 启动应用
 CMD ["node", "server.js"]

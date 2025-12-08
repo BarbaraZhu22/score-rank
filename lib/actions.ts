@@ -5,8 +5,7 @@ export type Action =
   | { type: 'updateScore'; contestant: string; judge: string; value: number | null }
   | { type: 'addContestant'; name: string }
   | { type: 'removeContestant'; name: string }
-  | { type: 'addJudge'; name: string }
-  | { type: 'recalc' };
+  | { type: 'updateContestantNumber'; contestant: string; number: string };
 
 // Apply a single action to the database
 async function applyAction(matchId: number, action: Action): Promise<void> {
@@ -19,22 +18,35 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
 
   switch (action.type) {
     case 'updateScore': {
+      // Find the actual contestant and judge names (case-insensitive match)
+      const normalizeName = (name: string): string => name.trim().toLowerCase();
+      const normalizedContestantName = normalizeName(action.contestant);
+      const normalizedJudgeName = normalizeName(action.judge);
+      
+      const actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedContestantName) || action.contestant;
+      const actualJudgeName = match.judges.find(j => normalizeName(j) === normalizedJudgeName) || action.judge;
+
       // Find existing score or create new one
+      // Smart merge: only update if existing value is null, or explicitly overwrite
       const existingScore = await db.scores
         .where('[matchId+contestant+judge]')
-        .equals([matchId, action.contestant, action.judge])
+        .equals([matchId, actualContestantName, actualJudgeName])
         .first();
 
       if (existingScore) {
-        await db.scores.update(existingScore.id!, {
-          value: action.value,
-          updatedAt: now,
-        });
+        // Only update if existing value is null, or if new value is explicitly provided
+        // This allows merging without overwriting existing scores
+        if (existingScore.value === null || action.value !== null) {
+          await db.scores.update(existingScore.id!, {
+            value: action.value,
+            updatedAt: now,
+          });
+        }
       } else {
         await db.scores.add({
           matchId,
-          contestant: action.contestant,
-          judge: action.judge,
+          contestant: actualContestantName,
+          judge: actualJudgeName,
           value: action.value,
           updatedAt: now,
         });
@@ -43,18 +55,23 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
       // Update match's updatedAt timestamp
       await db.matches.update(matchId, { updatedAt: now });
 
-      // Record in history
+      // Record in history (use actual names)
       await db.history.add({
         matchId,
         action: 'updateScore',
-        data: action,
+        data: { ...action, contestant: actualContestantName, judge: actualJudgeName },
         timestamp: now,
       });
       break;
     }
 
     case 'addContestant': {
-      if (!match.contestants.includes(action.name)) {
+      // Case-insensitive check for duplicates
+      const normalizeName = (name: string): string => name.trim().toLowerCase();
+      const normalizedActionName = normalizeName(action.name);
+      const existingContestant = match.contestants.find(c => normalizeName(c) === normalizedActionName);
+      
+      if (!existingContestant) {
         const updatedContestants = [...match.contestants, action.name];
         await db.matches.update(matchId, {
           contestants: updatedContestants,
@@ -106,35 +123,26 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
       break;
     }
 
-    case 'addJudge': {
-      if (!match.judges.includes(action.name)) {
-        const updatedJudges = [...match.judges, action.name];
-        await db.matches.update(matchId, {
-          judges: updatedJudges,
-          updatedAt: now,
-        });
+    case 'updateContestantNumber': {
+      // Find the actual contestant name (case-insensitive match)
+      const normalizeName = (name: string): string => name.trim().toLowerCase();
+      const normalizedActionName = normalizeName(action.contestant);
+      const actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedActionName) || action.contestant;
+      
+      // Update or add contestant number
+      const updatedNumbers = { ...(match.contestantNumbers || {}) };
+      updatedNumbers[actualContestantName] = action.number;
+      
+      await db.matches.update(matchId, {
+        contestantNumbers: updatedNumbers,
+        updatedAt: now,
+      });
 
-        // Record in history
-        await db.history.add({
-          matchId,
-          action: 'addJudge',
-          data: action,
-          timestamp: now,
-        });
-      }
-      break;
-    }
-
-    case 'recalc': {
-      // Recalculate totals - this would typically be done on the fly when displaying
-      // But we can update the match timestamp to indicate a recalculation occurred
-      await db.matches.update(matchId, { updatedAt: now });
-
-      // Record in history
+      // Record in history (use actual name)
       await db.history.add({
         matchId,
-        action: 'recalc',
-        data: action,
+        action: 'updateContestantNumber',
+        data: { ...action, contestant: actualContestantName },
         timestamp: now,
       });
       break;
@@ -145,9 +153,84 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
   }
 }
 
-// Apply multiple actions in sequence
+// Apply multiple actions in sequence with optimization for bulk operations
 export async function applyActions(matchId: number, actions: Action[]): Promise<void> {
+  if (actions.length === 0) return;
+
+  // For bulk operations, cache the match data to avoid repeated database reads
+  let cachedMatch: Match | undefined;
+  const getMatch = async (): Promise<Match> => {
+    if (!cachedMatch) {
+      cachedMatch = await db.matches.get(matchId);
+      if (!cachedMatch) {
+        throw new Error(`Match with id ${matchId} not found`);
+      }
+    }
+    return cachedMatch;
+  };
+
+  // Helper to normalize names for case-insensitive comparison
+  const normalizeName = (name: string): string => name.trim().toLowerCase();
+  
+  // Track processed contestants to avoid duplicates in bulk operations
+  const processedContestants = new Set<string>();
+
   for (const action of actions) {
+    const match = await getMatch();
+    
+    // Update cache for addContestant to avoid stale data
+    if (action.type === 'addContestant') {
+      const normalizedName = normalizeName(action.name);
+      if (!processedContestants.has(normalizedName)) {
+        const existingName = match.contestants.find(c => normalizeName(c) === normalizedName);
+        if (!existingName) {
+          const updatedContestants = [...match.contestants, action.name];
+          await db.matches.update(matchId, {
+            contestants: updatedContestants,
+            updatedAt: Date.now(),
+          });
+          // Update cache
+          cachedMatch = { ...match, contestants: updatedContestants };
+          processedContestants.add(normalizedName);
+          
+          await db.history.add({
+            matchId,
+            action: 'addContestant',
+            data: action,
+            timestamp: Date.now(),
+          });
+        }
+      }
+      continue;
+    }
+
+    // For updateContestantNumber, use cached match and update cache
+    if (action.type === 'updateContestantNumber') {
+      const match = await getMatch();
+      const normalizedContestantName = normalizeName(action.contestant);
+      const actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedContestantName) || action.contestant;
+      
+      const updatedNumbers = { ...(match.contestantNumbers || {}) };
+      updatedNumbers[actualContestantName] = action.number;
+      
+      await db.matches.update(matchId, {
+        contestantNumbers: updatedNumbers,
+        updatedAt: Date.now(),
+      });
+      // Update cache
+      cachedMatch = { ...match, contestantNumbers: updatedNumbers };
+      
+      await db.history.add({
+        matchId,
+        action: 'updateContestantNumber',
+        data: { ...action, contestant: actualContestantName },
+        timestamp: Date.now(),
+      });
+      continue;
+    }
+
+    // For other actions (updateScore, removeContestant), use standard applyAction
+    // These operations are less frequent in bulk scenarios, so using applyAction is acceptable
     await applyAction(matchId, action);
   }
 }

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # 构建时传入 API Key（可选，如果不需要在构建时使用）
+        # DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    ports:
+      - "3000:3000"
+    environment:
+      # 运行时环境变量，从 .env 文件读取
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    env_file:
+      - .env
+    restart: unless-stopped
+

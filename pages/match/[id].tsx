@@ -22,6 +22,7 @@ export default function MatchDetail() {
   const [pendingActions, setPendingActions] = useState<Action[] | null>(null);
   const [historyStack, setHistoryStack] = useState<HistorySnapshot[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [aiPromptKey, setAiPromptKey] = useState(0); // Key to reset AiPrompt state
   const MAX_HISTORY = 20;
 
   useEffect(() => {
@@ -125,7 +126,7 @@ export default function MatchDetail() {
 
   const handleActionsGenerated = (actions: Action[]) => {
     setPendingActions(actions);
-    setShowAiPrompt(false);
+    // Don't close AiPrompt - keep it open so user can modify input if they cancel
   };
 
   const handleConfirmActions = async () => {
@@ -136,9 +137,17 @@ export default function MatchDetail() {
       await applyActions(matchId, pendingActions);
       setPendingActions(null);
       await loadMatchData();
+      // Close AiPrompt and reset its state after successful application
+      setShowAiPrompt(false);
+      setAiPromptKey(prev => prev + 1); // Reset AiPrompt state
     } catch (error: any) {
       alert(`应用操作失败: ${error.message}`);
     }
+  };
+
+  const handleCancelActions = () => {
+    // Only close ConfirmModal, keep AiPrompt open with original input
+    setPendingActions(null);
   };
 
   const handleUndo = async () => {
@@ -230,9 +239,13 @@ export default function MatchDetail() {
 
       {showAiPrompt && (
         <AiPrompt
+          key={aiPromptKey}
           matchData={matchData}
           onActionsGenerated={handleActionsGenerated}
-          onClose={() => setShowAiPrompt(false)}
+          onClose={() => {
+            setShowAiPrompt(false);
+            setAiPromptKey(prev => prev + 1); // Reset state when manually closed
+          }}
         />
       )}
 
@@ -240,7 +253,7 @@ export default function MatchDetail() {
         <ConfirmModal
           actions={pendingActions}
           onConfirm={handleConfirmActions}
-          onCancel={() => setPendingActions(null)}
+          onCancel={handleCancelActions}
         />
       )}
 
