@@ -18,6 +18,8 @@ RUN pnpm install --frozen-lockfile
 
 # 构建阶段
 FROM base AS builder
+# 启用 pnpm（与 deps 阶段保持一致）
+RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
