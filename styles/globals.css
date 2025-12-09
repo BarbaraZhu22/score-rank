@@ -568,3 +568,54 @@ a {
 .gap-2 {
   gap: 1rem;
 }
+
+/* 比赛详情页面字体缩小 */
+.match-detail-page {
+  font-size: 0.875rem;
+}
+
+.match-detail-page h2 {
+  font-size: 1.25rem;
+}
+
+.match-detail-page .card {
+  font-size: 0.875rem;
+}
+
+.match-detail-page .btn {
+  font-size: 0.75rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.match-detail-page .btn-s {
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* TableView 表格字体特别缩小 */
+.match-detail-page .table {
+  font-size: 0.8125rem;
+}
+
+.match-detail-page .table th {
+  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.match-detail-page .table td {
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.match-detail-page .table-container {
+  font-size: 0.8125rem;
+}
+
+/* AI 应用界面模态框字体缩小 */
+.match-detail-page .modal-content {
+  font-size: 0.875rem;
+}
+
+.match-detail-page .modal-title {
+  font-size: 1.25rem;
+}

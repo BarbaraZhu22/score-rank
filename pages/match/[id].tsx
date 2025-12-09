@@ -184,12 +184,12 @@ export default function MatchDetail() {
   }
 
   return (
-    <div className="container">
-      <div style={{ marginBottom: "20px" }}>
+    <div className="container match-detail-page">
+      <div style={{ marginBottom: "1.125rem" }}>
         <button
           className="btn btn-non-outline"
           onClick={() => router.push("/")}
-          style={{ marginBottom: "16px" }}
+          style={{ marginBottom: "0.875rem" }}
         >
           ← 返回列表
         </button>
@@ -197,7 +197,7 @@ export default function MatchDetail() {
           <h2 style={{ margin: 0, color: "var(--dark)" }}>
             {matchData.match.name}
           </h2>
-          <div style={{ marginTop: "0.5em", color: "#666", fontSize: "0.8em" }}>
+          <div style={{ marginTop: "0.5em", color: "#666", fontSize: "0.75em" }}>
             更新于：
             {new Date(matchData.match.updatedAt).toLocaleString("zh-CN")}
           </div>
@@ -216,7 +216,7 @@ export default function MatchDetail() {
         <div
           style={{
             display: "flex",
-            gap: "12px",
+            gap: "0.4375rem",
             justifyContent: "center",
           }}
         >

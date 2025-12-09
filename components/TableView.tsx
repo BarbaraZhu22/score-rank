@@ -765,7 +765,7 @@ export default function TableView({
         <div className="flex-between mb-3">
           <h2 style={{ margin: 0, color: "var(--dark)" }}>评分表</h2>
           <div
-            style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}
+            style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
           >
             {children}
             <button className="btn btn-special" onClick={handleExportExcel}>
@@ -971,7 +971,7 @@ export default function TableView({
     <div className="card">
       <div className="flex-between mb-3">
         <h2 style={{ margin: 0, color: "var(--dark)" }}>评分表</h2>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           {children}
           <button className="btn btn-special" onClick={handleExportExcel}>
             📊 导出 Excel
@@ -1056,7 +1056,7 @@ export default function TableView({
                   {getSortIcon("average")}
                 </i>
               </th>
-              <th style={{ width: "1.875rem" }}>操作</th>
+              <th style={{ width: "1.5rem", fontSize: "0.75rem" }}>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -1224,8 +1224,8 @@ export default function TableView({
                         background: "none",
                         border: "none",
                         cursor: "pointer",
-                        padding: "0.25rem",
-                        fontSize: "1.125rem",
+                        padding: "0.125rem",
+                        fontSize: "0.875rem",
                         fontWeight: "bold",
                         color: "#ff6b6b",
                         lineHeight: "1",

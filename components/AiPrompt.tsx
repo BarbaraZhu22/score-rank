@@ -75,10 +75,10 @@ export default function AiPrompt({ matchData, onActionsGenerated, onClose }: AiP
 
         <div>
           <div style={{ 
-            marginBottom: '16px', 
-            padding: '12px', 
+            marginBottom: '0.875rem', 
+            padding: '0.625rem', 
             background: '#e7f3ff', 
-            borderRadius: '8px',
+            borderRadius: '0.5rem',
             border: '1px solid #b3d9ff'
           }}>
             <div 
@@ -87,32 +87,32 @@ export default function AiPrompt({ matchData, onActionsGenerated, onClose }: AiP
                 alignItems: 'center', 
                 justifyContent: 'space-between',
                 cursor: 'pointer',
-                marginBottom: showTips ? '12px' : '0'
+                marginBottom: showTips ? '0.625rem' : '0'
               }}
               onClick={() => setShowTips(!showTips)}
             >
-              <span style={{ fontWeight: 600, color: '#0066cc', fontSize: '14px' }}>
+              <span style={{ fontWeight: 600, color: '#0066cc', fontSize: '0.75rem' }}>
                 💡 如何整理图片信息以便 AI 识别？
               </span>
-              <span style={{ color: '#0066cc', fontSize: '18px', transition: 'transform 0.3s', transform: showTips ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              <span style={{ color: '#0066cc', fontSize: '1rem', transition: 'transform 0.3s', transform: showTips ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                 ▼
               </span>
             </div>
             {showTips && (
-              <div style={{ fontSize: '13px', color: '#333', lineHeight: '1.6' }}>
-                <p style={{ marginBottom: '8px', fontWeight: 600 }}>使用其他 AI 工具（如 ChatGPT、Claude 等）识别图片时，可以使用以下提示词：</p>
+              <div style={{ fontSize: '0.6875rem', color: '#333', lineHeight: '1.6' }}>
+                <p style={{ marginBottom: '0.4375rem', fontWeight: 600 }}>使用其他 AI 工具（如 ChatGPT、Claude 等）识别图片时，可以使用以下提示词：</p>
                 <div style={{ 
                   background: 'white', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
-                  marginBottom: '8px',
+                  padding: '0.625rem', 
+                  borderRadius: '0.375rem', 
+                  marginBottom: '0.4375rem',
                   border: '1px solid #ddd'
                 }}>
-                  <p style={{ marginBottom: '6px', fontWeight: 600 }}>提示词模板：</p>
+                  <p style={{ marginBottom: '0.3125rem', fontWeight: 600 }}>提示词模板：</p>
                   <pre style={{ 
                     whiteSpace: 'pre-wrap', 
                     wordBreak: 'break-word',
-                    fontSize: '12px',
+                    fontSize: '0.625rem',
                     lineHeight: '1.5',
                     margin: 0,
                     color: '#0066cc'
@@ -132,15 +132,15 @@ export default function AiPrompt({ matchData, onActionsGenerated, onClose }: AiP
 请开始识别：`}
                   </pre>
                 </div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
+                <p style={{ margin: 0, fontSize: '0.625rem', color: '#666' }}>
                   将 AI 识别后的文本复制粘贴到下方输入框即可
                 </p>
               </div>
             )}
           </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
+          <div style={{ marginBottom: '0.875rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.4375rem', fontWeight: 600 }}>
               输入文字指令
             </label>
             <textarea
@@ -155,17 +155,17 @@ export default function AiPrompt({ matchData, onActionsGenerated, onClose }: AiP
 
           {error && (
             <div style={{
-              padding: '12px',
+              padding: '0.625rem',
               background: '#f8d7da',
               color: '#721c24',
-              borderRadius: '8px',
-              marginBottom: '16px'
+              borderRadius: '0.5rem',
+              marginBottom: '0.875rem'
             }}>
               {error}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '0.625rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-outline" onClick={onClose} disabled={isLoading || isOcrLoading}>
               取消
             </button>
@@ -176,9 +176,9 @@ export default function AiPrompt({ matchData, onActionsGenerated, onClose }: AiP
               style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                gap: '8px', 
+                gap: '0.4375rem', 
                 justifyContent: 'center',
-                minWidth: '140px',
+                minWidth: '7.875rem',
                 position: 'relative'
               }}
             >
@@ -186,9 +186,9 @@ export default function AiPrompt({ matchData, onActionsGenerated, onClose }: AiP
                 className="loading" 
                 style={{ 
                   margin: 0, 
-                  width: '16px', 
-                  height: '16px',
-                  borderWidth: '2px',
+                  width: '0.875rem', 
+                  height: '0.875rem',
+                  borderWidth: '0.125rem',
                   flexShrink: 0,
                   opacity: isLoading ? 1 : 0,
                   visibility: isLoading ? 'visible' : 'hidden',

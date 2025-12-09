@@ -32,26 +32,26 @@ export default function ConfirmModal({ actions, onConfirm, onCancel }: ConfirmMo
         <div>
           {actions.length === 0 ? (
             <div style={{ 
-              padding: '24px', 
+              padding: '1.125rem', 
               textAlign: 'center', 
               color: '#666',
-              marginBottom: '24px'
+              marginBottom: '1.125rem'
             }}>
-              <p style={{ marginBottom: '8px', fontSize: '18px' }}>没有检测到操作</p>
-              <p style={{ fontSize: '14px', color: '#999' }}>请检查输入内容或重新描述</p>
+              <p style={{ marginBottom: '0.4375rem', fontSize: '0.875rem' }}>没有检测到操作</p>
+              <p style={{ fontSize: '0.6875rem', color: '#999' }}>请检查输入内容或重新描述</p>
             </div>
           ) : (
             <>
-              <p style={{ marginBottom: '16px', color: '#666' }}>
+              <p style={{ marginBottom: '0.625rem', color: '#666', fontSize: '0.75rem' }}>
                 以下操作将被应用到评分表：
               </p>
 
               <div style={{
                 background: '#f8f9fa',
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '24px',
-                maxHeight: '300px',
+                borderRadius: '0.5rem',
+                padding: '0.625rem',
+                marginBottom: '1.125rem',
+                maxHeight: '22.5rem',
                 overflowY: 'auto'
               }}>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -59,8 +59,10 @@ export default function ConfirmModal({ actions, onConfirm, onCancel }: ConfirmMo
                     <li
                       key={index}
                       style={{
-                        padding: '8px 0',
-                        borderBottom: index < actions.length - 1 ? '1px solid #e0e0e0' : 'none'
+                        padding: '0.3125rem 0',
+                        borderBottom: index < actions.length - 1 ? '1px solid #e0e0e0' : 'none',
+                        fontSize: '0.6875rem',
+                        lineHeight: '1.4'
                       }}
                     >
                       {getActionDescription(action)}
@@ -71,7 +73,7 @@ export default function ConfirmModal({ actions, onConfirm, onCancel }: ConfirmMo
             </>
           )}
 
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '0.625rem', justifyContent: 'flex-end' }}>
             <button className="btn btn-outline" onClick={onCancel}>
               {actions.length === 0 ? '关闭' : '取消'}
             </button>
