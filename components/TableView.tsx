@@ -44,6 +44,7 @@ export default function TableView({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(
     null
   );
+  const [showOperations, setShowOperations] = useState(false);
 
   // Create a map for quick score lookup
   const scoreMap = useMemo(() => {
@@ -126,9 +127,14 @@ export default function TableView({
         const bNumStr = contestantNumbers[b] || "";
         const aNum = parseFloat(aNumStr);
         const bNum = parseFloat(bNumStr);
-        
+
         // If both are valid numbers, sort as numbers
-        if (!isNaN(aNum) && !isNaN(bNum) && aNumStr.trim() !== "" && bNumStr.trim() !== "") {
+        if (
+          !isNaN(aNum) &&
+          !isNaN(bNum) &&
+          aNumStr.trim() !== "" &&
+          bNumStr.trim() !== ""
+        ) {
           aValue = aNum;
           bValue = bNum;
         } else if (!isNaN(aNum) && aNumStr.trim() !== "") {
@@ -147,15 +153,12 @@ export default function TableView({
       } else if (sortColumn === "total") {
         aValue = calcTotalForSort(a);
         bValue = calcTotalForSort(b);
-      } else if (sortColumn === "average") {
-        aValue = calcAverageForSort(a);
-        bValue = calcAverageForSort(b);
       }
 
       // Always sort as numbers for all columns
       const aNum = typeof aValue === "string" ? parseFloat(aValue) : aValue;
       const bNum = typeof bValue === "string" ? parseFloat(bValue) : bValue;
-      
+
       // Handle NaN cases
       if (isNaN(aNum as number) && isNaN(bNum as number)) {
         return 0;
@@ -166,7 +169,7 @@ export default function TableView({
       if (isNaN(bNum as number)) {
         return sortDirection === "asc" ? -1 : 1; // NaN goes to end
       }
-      
+
       return sortDirection === "asc"
         ? (aNum as number) - (bNum as number)
         : (bNum as number) - (aNum as number);
@@ -192,7 +195,9 @@ export default function TableView({
         const safeName = String(name || "");
         const originalIndex = contestants.indexOf(name);
         const random = Math.random().toString(36).substring(2, 9);
-        return `${originalIndex >= 0 ? originalIndex : index}_${safeName}_${random}`;
+        return `${
+          originalIndex >= 0 ? originalIndex : index
+        }_${safeName}_${random}`;
       });
     } catch (error) {
       console.error("Error generating sorted contestant keys:", error);
@@ -297,7 +302,10 @@ export default function TableView({
             count++;
           }
         } catch (error) {
-          console.error(`Error getting score for ${contestant}/${judge}:`, error);
+          console.error(
+            `Error getting score for ${contestant}/${judge}:`,
+            error
+          );
         }
       });
       return count > 0 ? sum : 0;
@@ -333,7 +341,12 @@ export default function TableView({
       const data: any[][] = [];
 
       // Header row
-      const headerRow = ["海选号", "选手", ...(Array.isArray(judges) ? judges : []), "总分", "平均分"];
+      const headerRow = [
+        "海选号",
+        "选手",
+        ...(Array.isArray(judges) ? judges : []),
+        "总分",
+      ];
       data.push(headerRow);
 
       // Data rows - use sortedContestants to maintain sort order
@@ -351,17 +364,22 @@ export default function TableView({
                   const score = getScore(safeContestant, judge);
                   row.push(score !== null ? String(score) : "");
                 } catch (error) {
-                  console.error(`Error getting score for ${safeContestant}/${judge}:`, error);
+                  console.error(
+                    `Error getting score for ${safeContestant}/${judge}:`,
+                    error
+                  );
                   row.push("");
                 }
               });
             }
             try {
               row.push(calculateTotal(safeContestant).toFixed(2));
-              row.push(calculateAverage(safeContestant).toFixed(2));
             } catch (error) {
-              console.error(`Error calculating totals for ${safeContestant}:`, error);
-              row.push("0.00", "0.00");
+              console.error(
+                `Error calculating totals for ${safeContestant}:`,
+                error
+              );
+              row.push("0.00");
             }
             data.push(row);
           } catch (error) {
@@ -474,7 +492,10 @@ export default function TableView({
             const score = getScore(safeContestant, judge);
             initialScores[judge] = score !== null ? score.toString() : "";
           } catch (error) {
-            console.error(`Error getting score for ${safeContestant}/${judge}:`, error);
+            console.error(
+              `Error getting score for ${safeContestant}/${judge}:`,
+              error
+            );
             initialScores[judge] = "";
           }
         });
@@ -508,109 +529,44 @@ export default function TableView({
         return;
       }
 
-    const now = Date.now();
-    const contestantName = editingRow.contestant.trim();
+      const now = Date.now();
+      const contestantName = editingRow.contestant.trim();
 
-    // Validate and parse scores
-    const scoreValues: Record<string, number | null> = {};
-    for (const judge of judges) {
-      const scoreStr = editingRow.scores[judge]?.trim() || "";
-      if (scoreStr === "") {
-        scoreValues[judge] = null;
-      } else {
-        const numValue = parseFloat(scoreStr);
-        if (isNaN(numValue) || numValue < 0 || numValue > 100) {
-          alert(`裁判 "${judge}" 的分数无效 (0-100)`);
-          return;
-        }
-        scoreValues[judge] = numValue;
-      }
-    }
-
-    if (editingRow.isNew) {
-      // Add new contestant
-      if (match.contestants.includes(contestantName)) {
-        alert("该选手已存在");
-        return;
-      }
-
-      const updatedContestants = [...match.contestants, contestantName];
-      const updatedNumbers = {
-        ...(match.contestantNumbers || {}),
-        [contestantName]: editingRow.number.trim(),
-      };
-
-      if (onBeforeUpdate) {
-        try {
-          await onBeforeUpdate();
-        } catch (error) {
-          console.error("Error in onBeforeUpdate:", error);
-        }
-      }
-
-      await db.matches.update(matchId, {
-        contestants: updatedContestants,
-        contestantNumbers: updatedNumbers,
-        updatedAt: now,
-      });
-
-      // Add scores
+      // Validate and parse scores
+      const scoreValues: Record<string, number | null> = {};
       for (const judge of judges) {
-        if (scoreValues[judge] !== null) {
-          await db.scores.add({
-            matchId,
-            contestant: contestantName,
-            judge,
-            value: scoreValues[judge],
-            updatedAt: now,
-          });
-        }
-      }
-    } else {
-      // Update existing contestant
-      const oldName = editingRow.originalName!;
-      const newName = contestantName;
-
-      if (onBeforeUpdate) {
-        try {
-          await onBeforeUpdate();
-        } catch (error) {
-          console.error("Error in onBeforeUpdate:", error);
+        const scoreStr = editingRow.scores[judge]?.trim() || "";
+        if (scoreStr === "") {
+          scoreValues[judge] = null;
+        } else {
+          const numValue = parseFloat(scoreStr);
+          if (isNaN(numValue) || numValue < 0 || numValue > 100) {
+            alert(`裁判 "${judge}" 的分数无效 (0-100)`);
+            return;
+          }
+          scoreValues[judge] = numValue;
         }
       }
 
-      if (oldName !== newName) {
-        // Name changed, need to update all references
-        if (match.contestants.includes(newName) && oldName !== newName) {
-          alert("该选手名称已存在");
+      if (editingRow.isNew) {
+        // Add new contestant
+        if (match.contestants.includes(contestantName)) {
+          alert("该选手已存在");
           return;
         }
 
-        const updatedContestants = match.contestants.map((c) =>
-          c === oldName ? newName : c
-        );
+        const updatedContestants = [...match.contestants, contestantName];
+        const updatedNumbers = {
+          ...(match.contestantNumbers || {}),
+          [contestantName]: editingRow.number.trim(),
+        };
 
-        // Update scores - first update contestant name in all scores
-        const allScores = await db.scores
-          .where("matchId")
-          .equals(matchId)
-          .toArray();
-        for (const score of allScores) {
-          if (score.contestant === oldName) {
-            await db.scores.update(score.id!, {
-              contestant: newName,
-              updatedAt: now,
-            });
+        if (onBeforeUpdate) {
+          try {
+            await onBeforeUpdate();
+          } catch (error) {
+            console.error("Error in onBeforeUpdate:", error);
           }
-        }
-
-        // Update contestantNumbers
-        const updatedNumbers = { ...(match.contestantNumbers || {}) };
-        if (updatedNumbers[oldName] !== undefined) {
-          updatedNumbers[newName] = editingRow.number.trim();
-          delete updatedNumbers[oldName];
-        } else {
-          updatedNumbers[newName] = editingRow.number.trim();
         }
 
         await db.matches.update(matchId, {
@@ -619,21 +575,12 @@ export default function TableView({
           updatedAt: now,
         });
 
-        // Update scores for new name
+        // Add scores
         for (const judge of judges) {
-          const existingScore = allScores.find(
-            (s) => s.contestant === oldName && s.judge === judge
-          );
-          if (existingScore) {
-            await db.scores.update(existingScore.id!, {
-              contestant: newName,
-              value: scoreValues[judge],
-              updatedAt: now,
-            });
-          } else if (scoreValues[judge] !== null) {
+          if (scoreValues[judge] !== null) {
             await db.scores.add({
               matchId,
-              contestant: newName,
+              contestant: contestantName,
               judge,
               value: scoreValues[judge],
               updatedAt: now,
@@ -641,42 +588,116 @@ export default function TableView({
           }
         }
       } else {
-        // Only number and scores changed
-        const updatedNumbers = {
-          ...(match.contestantNumbers || {}),
-          [oldName]: editingRow.number.trim(),
-        };
+        // Update existing contestant
+        const oldName = editingRow.originalName!;
+        const newName = contestantName;
 
-        await db.matches.update(matchId, {
-          contestantNumbers: updatedNumbers,
-          updatedAt: now,
-        });
+        if (onBeforeUpdate) {
+          try {
+            await onBeforeUpdate();
+          } catch (error) {
+            console.error("Error in onBeforeUpdate:", error);
+          }
+        }
 
-        // Update scores
-        for (const judge of judges) {
-          const existingScore = scores.find(
-            (s) => s.contestant === oldName && s.judge === judge
+        if (oldName !== newName) {
+          // Name changed, need to update all references
+          if (match.contestants.includes(newName) && oldName !== newName) {
+            alert("该选手名称已存在");
+            return;
+          }
+
+          const updatedContestants = match.contestants.map((c) =>
+            c === oldName ? newName : c
           );
-          if (existingScore) {
-            if (scoreValues[judge] === null) {
-              await db.scores.delete(existingScore.id!);
-            } else {
+
+          // Update scores - first update contestant name in all scores
+          const allScores = await db.scores
+            .where("matchId")
+            .equals(matchId)
+            .toArray();
+          for (const score of allScores) {
+            if (score.contestant === oldName) {
+              await db.scores.update(score.id!, {
+                contestant: newName,
+                updatedAt: now,
+              });
+            }
+          }
+
+          // Update contestantNumbers
+          const updatedNumbers = { ...(match.contestantNumbers || {}) };
+          if (updatedNumbers[oldName] !== undefined) {
+            updatedNumbers[newName] = editingRow.number.trim();
+            delete updatedNumbers[oldName];
+          } else {
+            updatedNumbers[newName] = editingRow.number.trim();
+          }
+
+          await db.matches.update(matchId, {
+            contestants: updatedContestants,
+            contestantNumbers: updatedNumbers,
+            updatedAt: now,
+          });
+
+          // Update scores for new name
+          for (const judge of judges) {
+            const existingScore = allScores.find(
+              (s) => s.contestant === oldName && s.judge === judge
+            );
+            if (existingScore) {
               await db.scores.update(existingScore.id!, {
+                contestant: newName,
+                value: scoreValues[judge],
+                updatedAt: now,
+              });
+            } else if (scoreValues[judge] !== null) {
+              await db.scores.add({
+                matchId,
+                contestant: newName,
+                judge,
                 value: scoreValues[judge],
                 updatedAt: now,
               });
             }
-          } else if (scoreValues[judge] !== null) {
-            await db.scores.add({
-              matchId,
-              contestant: oldName,
-              judge,
-              value: scoreValues[judge],
-              updatedAt: now,
-            });
+          }
+        } else {
+          // Only number and scores changed
+          const updatedNumbers = {
+            ...(match.contestantNumbers || {}),
+            [oldName]: editingRow.number.trim(),
+          };
+
+          await db.matches.update(matchId, {
+            contestantNumbers: updatedNumbers,
+            updatedAt: now,
+          });
+
+          // Update scores
+          for (const judge of judges) {
+            const existingScore = scores.find(
+              (s) => s.contestant === oldName && s.judge === judge
+            );
+            if (existingScore) {
+              if (scoreValues[judge] === null) {
+                await db.scores.delete(existingScore.id!);
+              } else {
+                await db.scores.update(existingScore.id!, {
+                  value: scoreValues[judge],
+                  updatedAt: now,
+                });
+              }
+            } else if (scoreValues[judge] !== null) {
+              await db.scores.add({
+                matchId,
+                contestant: oldName,
+                judge,
+                value: scoreValues[judge],
+                updatedAt: now,
+              });
+            }
           }
         }
-      }
       }
 
       setEditingRow(null);
@@ -731,7 +752,7 @@ export default function TableView({
     }
   };
 
-  const handleSort = (column: "number" | "total" | "average") => {
+  const handleSort = (column: "number" | "total") => {
     if (sortColumn === column) {
       // Toggle direction or clear
       if (sortDirection === "asc") {
@@ -746,7 +767,7 @@ export default function TableView({
     }
   };
 
-  const getSortIcon = (column: "number" | "total" | "average") => {
+  const getSortIcon = (column: "number" | "total") => {
     if (sortColumn !== column) {
       return "↓↑"; // Neutral sort icon
     }
@@ -764,10 +785,14 @@ export default function TableView({
       <div className="card">
         <div className="flex-between mb-3">
           <h2 style={{ margin: 0, color: "var(--dark)" }}>评分表</h2>
-          <div
-            style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
-          >
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             {children}
+            <button
+              className="btn btn-s btn-outline"
+              onClick={() => setShowOperations(!showOperations)}
+            >
+              {showOperations ? "隐藏操作" : "显示操作"}
+            </button>
             <button className="btn btn-special" onClick={handleExportExcel}>
               📊 导出 Excel
             </button>
@@ -917,24 +942,6 @@ export default function TableView({
                             />
                           </td>
                         </tr>
-                        <tr>
-                          <td style={{ padding: "0.5rem", fontWeight: 600 }}>
-                            平均分：
-                          </td>
-                          <td style={{ padding: "0.5rem" }}>
-                            <input
-                              className="input"
-                              type="text"
-                              value={average.toFixed(2)}
-                              readOnly
-                              style={{
-                                width: "100%",
-                                background: "#f5f5f5",
-                                cursor: "not-allowed",
-                              }}
-                            />
-                          </td>
-                        </tr>
                       </tbody>
                     </table>
                     <div
@@ -973,7 +980,18 @@ export default function TableView({
         <h2 style={{ margin: 0, color: "var(--dark)" }}>评分表</h2>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           {children}
-          <button className="btn btn-special" onClick={handleExportExcel}>
+          <button
+            className="btn btn-s"
+            onClick={() => setShowOperations(!showOperations)}
+            style={{ fontSize: "0.7rem" }}
+          >
+            {showOperations ? "隐藏操作" : "显示操作"}
+          </button>
+          <button
+            className="btn btn-special"
+            style={{ fontSize: "0.7rem" }}
+            onClick={handleExportExcel}
+          >
             📊 导出 Excel
           </button>
         </div>
@@ -1033,35 +1051,16 @@ export default function TableView({
                   {getSortIcon("total")}
                 </i>
               </th>
-              <th
-                onClick={() => handleSort("average")}
-                style={{
-                  cursor: "pointer",
-                  userSelect: "none",
-                }}
-              >
-                均分{" "}
-                <i
-                  style={{
-                    display: "inline-block",
-                    width: "1rem",
-                    textAlign: "center",
-                    color:
-                      sortColumn === "average"
-                        ? "rgba(207, 182, 231, 1)"
-                        : "rgba(255, 255, 255, 0.3)",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {getSortIcon("average")}
-                </i>
-              </th>
-              <th style={{ width: "1.5rem", fontSize: "0.75rem" }}>操作</th>
+              {showOperations && (
+                <th style={{ width: "1.5rem", fontSize: "0.75rem" }}>操作</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {sortedContestants.map((contestant, index) => {
-              const uniqueKey = sortedContestantKeys[index] || `fallback_${index}_${contestant}`;
+              const uniqueKey =
+                sortedContestantKeys[index] ||
+                `fallback_${index}_${contestant}`;
               const isEven = index % 2 === 0;
               const safeContestant = String(contestant || "");
 
@@ -1107,7 +1106,9 @@ export default function TableView({
                         }}
                       />
                     ) : (
-                      (contestantNumbers && contestantNumbers[safeContestant]) || "-"
+                      (contestantNumbers &&
+                        contestantNumbers[safeContestant]) ||
+                      "-"
                     )}
                   </td>
                   <td style={{ fontWeight: 600, position: "relative" }}>
@@ -1133,53 +1134,57 @@ export default function TableView({
                       </span>
                     )}
                   </td>
-                  {Array.isArray(judges) && judges.map((judge) => {
-                    const safeJudge = String(judge || "");
-                    const isEditingCell =
-                      editingCell?.contestant === safeContestant &&
-                      editingCell?.judge === safeJudge;
-                    let score: number | null = null;
-                    let isEmpty = true;
-                    try {
-                      score = getScore(safeContestant, safeJudge);
-                      isEmpty = score === null;
-                    } catch (error) {
-                      console.error(`Error getting score for ${safeContestant}/${safeJudge}:`, error);
-                    }
+                  {Array.isArray(judges) &&
+                    judges.map((judge) => {
+                      const safeJudge = String(judge || "");
+                      const isEditingCell =
+                        editingCell?.contestant === safeContestant &&
+                        editingCell?.judge === safeJudge;
+                      let score: number | null = null;
+                      let isEmpty = true;
+                      try {
+                        score = getScore(safeContestant, safeJudge);
+                        isEmpty = score === null;
+                      } catch (error) {
+                        console.error(
+                          `Error getting score for ${safeContestant}/${safeJudge}:`,
+                          error
+                        );
+                      }
 
-                    return (
-                      <td
-                        key={judge}
-                        className={`editable ${isEmpty ? "empty" : ""}`}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          handleCellDoubleClick(safeContestant, safeJudge);
-                        }}
-                      >
-                        {isEditingCell ? (
-                          <input
-                            type="text"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={handleCellBlur}
-                            onKeyDown={handleCellKeyDown}
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              width: "100%",
-                              padding: "0.25rem",
-                              border: "0.125rem solid #000",
-                              borderRadius: "0.25rem",
-                            }}
-                          />
-                        ) : score !== null ? (
-                          score.toFixed(2)
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    );
-                  })}
+                      return (
+                        <td
+                          key={judge}
+                          className={`editable ${isEmpty ? "empty" : ""}`}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleCellDoubleClick(safeContestant, safeJudge);
+                          }}
+                        >
+                          {isEditingCell ? (
+                            <input
+                              type="text"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={handleCellBlur}
+                              onKeyDown={handleCellKeyDown}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                width: "100%",
+                                padding: "0.25rem",
+                                border: "0.125rem solid #000",
+                                borderRadius: "0.25rem",
+                              }}
+                            />
+                          ) : score !== null ? (
+                            score.toFixed(2)
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      );
+                    })}
                   <td
                     style={{
                       fontWeight: 600,
@@ -1197,44 +1202,29 @@ export default function TableView({
                       }
                     })()}
                   </td>
-                  <td
-                    style={{
-                      fontWeight: 600,
-                      background:
-                        sortColumn === "average"
-                          ? "rgba(138, 43, 226, 0.15)"
-                          : "transparent",
-                    }}
-                  >
-                    {(() => {
-                      try {
-                        return calculateAverage(safeContestant).toFixed(2);
-                      } catch (error) {
-                        return "0.00";
-                      }
-                    })()}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteContestant(safeContestant);
-                      }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: "0.125rem",
-                        fontSize: "0.875rem",
-                        fontWeight: "bold",
-                        color: "#ff6b6b",
-                        lineHeight: "1",
-                      }}
-                      title="删除"
-                    >
-                      ×
-                    </button>
-                  </td>
+                  {showOperations && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteContestant(safeContestant);
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: "0.125rem",
+                          fontSize: "0.875rem",
+                          fontWeight: "bold",
+                          color: "#ff6b6b",
+                          lineHeight: "1",
+                        }}
+                        title="删除"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -1248,7 +1238,7 @@ export default function TableView({
                 }}
                 onClick={handleAddNewRow}
                 title="添加选手"
-                colSpan={judges.length + 5}
+                colSpan={judges.length + 3 + (showOperations ? 1 : 0)}
               >
                 +
               </td>
@@ -1385,24 +1375,6 @@ export default function TableView({
                             className="input"
                             type="text"
                             value={total.toFixed(2)}
-                            readOnly
-                            style={{
-                              width: "100%",
-                              background: "#f5f5f5",
-                              cursor: "not-allowed",
-                            }}
-                          />
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: "0.5rem", fontWeight: 600 }}>
-                          平均分：
-                        </td>
-                        <td style={{ padding: "0.5rem" }}>
-                          <input
-                            className="input"
-                            type="text"
-                            value={average.toFixed(2)}
                             readOnly
                             style={{
                               width: "100%",
