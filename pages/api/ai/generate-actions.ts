@@ -27,18 +27,49 @@ export default async function handler(
   const contestantNumbers = matchData?.match?.contestantNumbers || {};
   const scores = matchData?.scores || [];
 
+  // Build a map: number -> contestant name(s) (numbers can repeat)
+  const numberToContestants: Record<string, string[]> = {};
+  const allNumbers = new Set<string>();
+  
+  Object.entries(contestantNumbers).forEach(([name, number]) => {
+    const numStr = String(number || '');
+    if (numStr) {
+      allNumbers.add(numStr);
+      if (!numberToContestants[numStr]) {
+        numberToContestants[numStr] = [];
+      }
+      numberToContestants[numStr].push(name);
+    }
+  });
+
+  // Build scores by number for easier lookup
+  const scoresByNumber: Record<string, Array<{ judge: string; value: number | null }>> = {};
+  scores.forEach((s: any) => {
+    const contestantName = s.contestant;
+    const number = contestantNumbers[contestantName];
+    if (number) {
+      const numStr = String(number);
+      if (!scoresByNumber[numStr]) {
+        scoresByNumber[numStr] = [];
+      }
+      scoresByNumber[numStr].push({
+        judge: s.judge,
+        value: s.value,
+      });
+    }
+  });
+
   // Build a comprehensive data structure for AI to understand current state
   const currentState = {
     judges,
-    contestants: contestants.map((name: string) => ({
-      name,
-      number: contestantNumbers[name] || null,
-    })),
-    scores: scores.map((s: any) => ({
-      contestant: s.contestant,
-      judge: s.judge,
-      value: s.value,
-    })),
+    existingNumbers: Array.from(allNumbers).sort((a, b) => {
+      const aNum = parseInt(a, 10);
+      const bNum = parseInt(b, 10);
+      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+      return a.localeCompare(b);
+    }),
+    numberToContestants,
+    scoresByNumber,
   };
 
   try {
@@ -57,44 +88,78 @@ export default async function handler(
             content: `You are an intelligent assistant that generates JSON actions for a competition scoring system.
 
 CRITICAL RULES:
-1. **Smart Detection**: Carefully examine the input data and existing data to determine if it's ADDING new data or EDITING existing data.
-2. **Name Matching**: Match contestants by name (case-insensitive, ignore spaces). If a name exists in current contestants, it's an EDIT, otherwise it's ADD.
-3. **Contestant Number (海选号)**: If input contains both name and number (序号), check if the name already exists:
-   - If name exists but has no number → use updateContestantNumber
-   - If name exists with different number → use updateContestantNumber (update)
-   - If name doesn't exist → use addContestant + updateContestantNumber
-4. **Score Merging**: When updating scores, ONLY update if the score doesn't exist or is null. Preserve existing non-null scores unless explicitly told to overwrite.
-5. **Bulk Operations**: Support bulk operations like "给所有没有海选号的选手加海选号" or "给所有选手绑上某个老师的评分"
+1. **Only Use Numbers (海选号)**: The system ONLY uses 海选号 (numbers) to identify contestants. NO names are used in user input.
+2. **Smart Detection**: Check if a number exists in existingNumbers. If exists → UPDATE, if not → ADD.
+3. **Name Auto-generation**: When adding, auto-generate unique name as "选手-{number}" or "选手-{number}-{counter}" if number already exists.
+4. **Number Range Support**: 
+   - "增加10个选手" → Add numbers 1-10 (or continue from existing max)
+   - "增加20-50号选手" → Add numbers 20, 21, 22, ..., 50
+   - "增加20到50号选手" → Same as above
+5. **Score Operations**:
+   - "海选号 裁判 分数" → Update score for that number and judge
+   - "海选号 所有老师 分数" → Update scores for that number and ALL judges
+   - Can update multiple contestants at once
+6. **Bulk Operations**: Support adding/updating multiple contestants in one request.
 
 Available actions:
-- updateScore: { type: "updateScore", contestant: string, judge: string, value: number }
-  * Use when setting/updating a score. Only update if score is missing or null (unless explicitly overwriting).
-- addContestant: { type: "addContestant", name: string }
-  * Use when adding a NEW contestant that doesn't exist in current contestants.
+- updateScore: { type: "updateScore", contestant: string, judge: string, value: number, number: string }
+  * contestant: Auto-generated name (you don't need to provide, system will find by number)
+  * number: REQUIRED - the 海选号
+  * judge: Judge name (must match exactly from judges list)
+  * value: Score value (0-100)
+- addContestant: { type: "addContestant", name: string, number: string }
+  * name: Auto-generated as "选手-{number}" (or "选手-{number}-{counter}" if duplicate)
+  * number: REQUIRED - the 海选号
 - updateContestantNumber: { type: "updateContestantNumber", contestant: string, number: string }
-  * Use when setting or updating a contestant's audition number (海选号).
+  * Usually not needed when adding new contestants (number is set in addContestant)
 
 Current match state:
 Judges: ${judges.join(', ') || 'None'}
-Contestants with numbers:
-${JSON.stringify(currentState.contestants, null, 2)}
-Existing scores:
-${JSON.stringify(currentState.scores, null, 2)}
+Existing 海选号: ${currentState.existingNumbers.join(', ') || 'None'}
+Number to Contestants mapping:
+${JSON.stringify(currentState.numberToContestants, null, 2)}
+Scores by number:
+${JSON.stringify(currentState.scoresByNumber, null, 2)}
 
 Input patterns you should recognize:
-- "序号+选手名" (e.g., "001 张三") → addContestant + updateContestantNumber
-- "序号+选手名+分数" (e.g., "001 张三 Judge A 8.8") → addContestant + updateContestantNumber + updateScore
-- "给所有没有海选号的选手加海选号" → Multiple updateContestantNumber actions
-- "给所有选手绑上某个老师的评分" → Multiple updateScore actions for all contestants
+1. **Add contestants by count**: "增加10个选手" or "再帮我增加10个选手"
+   → Find max existing number, add from max+1 to max+10
+   → Example: If max is 20, add 21-30
+
+2. **Add contestants by range**: "增加20-50号选手" or "增加20到50号选手"
+   → Add all numbers from 20 to 50 (only if they don't exist)
+   → For each: addContestant with number
+
+3. **Add contestant with score**: "001 Judge A 8.8" or "1 Judge A 8.8"
+   → If 001 exists: updateScore
+   → If 001 doesn't exist: addContestant + updateScore
+
+4. **Update single score**: "001 Judge A 8.8"
+   → Find contestant by number 001, updateScore
+
+5. **Update all scores for a number**: "001 所有老师 8.5" or "1 所有裁判 8.5"
+   → Find contestant by number 001, updateScore for ALL judges
+
+6. **Bulk add with scores**: Multiple lines of "海选号 裁判 分数"
+   → Process each line, add if needed, update scores
 
 IMPORTANT: 
-- Compare input names with existing contestants (case-insensitive)
-- If name exists → EDIT operations (updateContestantNumber, updateScore)
-- If name doesn't exist → ADD operations (addContestant first, then updateContestantNumber/updateScore)
-- When updating scores, preserve existing non-null values unless explicitly overwriting
+- ALWAYS check existingNumbers to determine if number exists
+- If number exists → use UPDATE operations (find first contestant with that number)
+- If number doesn't exist → use ADD operations
+- For "增加X个选手", calculate starting number from max existing + 1
+- For "增加X-Y号选手", add all numbers from X to Y that don't exist
+- When updating scores, you can update multiple contestants at once
+- Always include 'number' field in all actions
+- ⚠️ CRITICAL: Judge names MUST match EXACTLY from the judges list provided above
+  * If input has "Judge A" but judges list has "Judge A", use "Judge A"
+  * If input has "张老师" but judges list has "张老师", use "张老师"
+  * If input has similar but not exact match, find the closest match from judges list
+  * NEVER use judge names that are not in the judges list
+  * If judge name doesn't match, try to find the closest match (case-insensitive, ignore spaces)
 
 Return only a valid JSON array of actions. Example:
-[{"type":"addContestant","name":"张三"},{"type":"updateContestantNumber","contestant":"张三","number":"001"},{"type":"updateScore","contestant":"张三","judge":"Judge A","value":8.8}]`,
+[{"type":"addContestant","name":"选手-21","number":"21"},{"type":"addContestant","name":"选手-22","number":"22"},{"type":"updateScore","contestant":"选手-1","judge":"Judge A","value":8.8,"number":"1"}]`,
           },
           {
             role: 'user',
@@ -160,141 +225,201 @@ async function fallbackParse(text: string, matchData: any): Promise<Action[]> {
   const contestantNumbers = matchData?.match?.contestantNumbers || {};
   const judges = matchData?.judges || [];
 
-  // Helper function to check if contestant exists (case-insensitive)
-  const findContestant = (name: string): string | null => {
-    const normalizedName = name.trim().toLowerCase();
-    return contestants.find((c: string) => c.toLowerCase() === normalizedName) || null;
+  // Build set of existing numbers
+  const existingNumbers = new Set<string>();
+  Object.values(contestantNumbers).forEach(num => {
+    if (num) existingNumbers.add(String(num));
+  });
+
+  // Helper function to find contestant by number (returns first match)
+  const findContestantByNumber = (number: string): string | null => {
+    const numStr = String(number).trim();
+    const entry = Object.entries(contestantNumbers).find(([_, n]) => String(n) === numStr);
+    return entry ? entry[0] : null;
   };
 
-  for (const line of lines) {
-    // Pattern: "序号 选手名" or "001 张三" -> addContestant + updateContestantNumber
-    const numberNameMatch = line.match(/^(\d+|[A-Za-z]+\d+)\s+(.+)$/);
-    if (numberNameMatch) {
-      const [, number, name] = numberNameMatch;
-      const existingName = findContestant(name);
-      
-      if (!existingName) {
-        // New contestant
-        actions.push({
-          type: 'addContestant',
-          name: name.trim(),
-        });
-      }
-      
-      // Update number (whether new or existing)
-      actions.push({
-        type: 'updateContestantNumber',
-        contestant: existingName || name.trim(),
-        number: number.trim(),
+  // Helper function to generate unique name from number
+  const generateName = (number: string): string => {
+    let name = `选手-${number}`;
+    let counter = 1;
+    while (contestants.includes(name)) {
+      name = `选手-${number}-${counter}`;
+      counter++;
+    }
+    return name;
+  };
+
+  // Helper function to find exact or closest match for judge name
+  const findJudgeName = (inputJudge: string): string | null => {
+    const normalizedInput = inputJudge.trim().toLowerCase().replace(/\s+/g, '');
+    
+    // First try exact match (case-insensitive)
+    const exactMatch = judges.find((j: string) => j.toLowerCase().trim() === inputJudge.toLowerCase().trim());
+    if (exactMatch) return exactMatch;
+    
+    // Try match ignoring spaces
+    const noSpaceMatch = judges.find((j: string) => 
+      j.toLowerCase().replace(/\s+/g, '') === normalizedInput
+    );
+    if (noSpaceMatch) return noSpaceMatch;
+    
+    // Try partial match (contains)
+    const partialMatch = judges.find((j: string) => 
+      j.toLowerCase().includes(normalizedInput) || normalizedInput.includes(j.toLowerCase())
+    );
+    if (partialMatch) return partialMatch;
+    
+    return null;
+  };
+
+  // Check for bulk add patterns first
+  const bulkAddMatch = text.match(/(?:增加|添加)(\d+)(?:个|位)?选手/);
+  if (bulkAddMatch) {
+    const count = parseInt(bulkAddMatch[1], 10);
+    if (!isNaN(count) && count > 0) {
+      // Find max existing number
+      let maxNum = 0;
+      existingNumbers.forEach(num => {
+        const numVal = parseInt(num, 10);
+        if (!isNaN(numVal) && numVal > maxNum) {
+          maxNum = numVal;
+        }
       });
-      continue;
-    }
-
-    // Pattern: "序号 选手名 裁判 分数" or "001 张三 Judge A 8.8"
-    const numberNameScoreMatch = line.match(/^(\d+|[A-Za-z]+\d+)\s+(.+?)\s+([^\s]+)\s+([\d.]+)$/);
-    if (numberNameScoreMatch) {
-      const [, number, name, judge, value] = numberNameScoreMatch;
-      const existingName = findContestant(name);
       
-      if (!existingName) {
-        actions.push({
-          type: 'addContestant',
-          name: name.trim(),
-        });
+      // Add from maxNum+1 to maxNum+count
+      for (let i = 1; i <= count; i++) {
+        const number = String(maxNum + i);
+        if (!existingNumbers.has(number)) {
+          const name = generateName(number);
+          actions.push({
+            type: 'addContestant',
+            name,
+            number,
+          });
+        }
       }
-      
-      actions.push({
-        type: 'updateContestantNumber',
-        contestant: existingName || name.trim(),
-        number: number.trim(),
-      });
-      
-      actions.push({
-        type: 'updateScore',
-        contestant: existingName || name.trim(),
-        judge: judge.trim(),
-        value: parseFloat(value),
-      });
-      continue;
-    }
-
-    // Pattern: "选手名 裁判 分数" or "张三 Judge A 8.8" -> updateScore
-    const scoreMatch = line.match(/^(.+?)\s+([^\s]+)\s+([\d.]+)$/);
-    if (scoreMatch) {
-      const [, contestant, judge, value] = scoreMatch;
-      const existingName = findContestant(contestant);
-      
-      if (existingName) {
-        actions.push({
-          type: 'updateScore',
-          contestant: existingName,
-          judge: judge.trim(),
-          value: parseFloat(value),
-        });
-      } else {
-        // New contestant with score
-        actions.push({
-          type: 'addContestant',
-          name: contestant.trim(),
-        });
-        actions.push({
-          type: 'updateScore',
-          contestant: contestant.trim(),
-          judge: judge.trim(),
-          value: parseFloat(value),
-        });
-      }
-      continue;
-    }
-
-    // Pattern: "添加选手 王五" or "addContestant 王五"
-    if (line.includes('添加选手') || line.toLowerCase().includes('addcontestant')) {
-      const name = line.replace(/添加选手|addContestant/gi, '').trim();
-      if (name && !findContestant(name)) {
-        actions.push({
-          type: 'addContestant',
-          name,
-        });
-      }
-      continue;
-    }
-
-    // Pattern: "给所有没有海选号的选手加海选号" or similar bulk operations
-    if (line.includes('没有海选号') || line.includes('加海选号')) {
-      // This is a complex operation, would need more context
-      // For now, skip and let AI handle it
-      continue;
+      return actions;
     }
   }
 
-  // If no actions found, try to parse more complex patterns
-  if (actions.length === 0) {
-    const words = text.split(/\s+/);
-    for (let i = 0; i < words.length - 2; i++) {
-      const num = parseFloat(words[i + 2]);
-      if (!isNaN(num) && num >= 0 && num <= 100) {
-        const existingName = findContestant(words[i]);
-        if (existingName) {
+  // Check for range add pattern: "增加20-50号选手" or "增加20到50号选手"
+  const rangeAddMatch = text.match(/(?:增加|添加)(\d+)[-到](\d+)(?:号)?选手/);
+  if (rangeAddMatch) {
+    const start = parseInt(rangeAddMatch[1], 10);
+    const end = parseInt(rangeAddMatch[2], 10);
+    if (!isNaN(start) && !isNaN(end) && start <= end) {
+      for (let i = start; i <= end; i++) {
+        const number = String(i);
+        if (!existingNumbers.has(number)) {
+          const name = generateName(number);
+          actions.push({
+            type: 'addContestant',
+            name,
+            number,
+          });
+        }
+      }
+      return actions;
+    }
+  }
+
+  for (const line of lines) {
+    // Pattern: "海选号 裁判 分数" or "001 Judge A 8.8" or "1 Judge A 8.8"
+    const numberScoreMatch = line.match(/^(\d+)\s+(.+?)\s+([\d.]+)$/);
+    if (numberScoreMatch) {
+      const [, number, judgeInput, value] = numberScoreMatch;
+      const numStr = number.trim();
+      
+      // Find exact or closest judge name match
+      const matchedJudge = findJudgeName(judgeInput.trim());
+      if (!matchedJudge) {
+        // Skip if judge name doesn't match any in the list
+        continue;
+      }
+      
+      const existingName = findContestantByNumber(numStr);
+      
+      if (existingName) {
+        // Update existing
+        actions.push({
+          type: 'updateScore',
+          contestant: existingName,
+          judge: matchedJudge,
+          value: parseFloat(value),
+          number: numStr,
+        });
+      } else {
+        // Add new
+        const name = generateName(numStr);
+        actions.push({
+          type: 'addContestant',
+          name,
+          number: numStr,
+        });
+        actions.push({
+          type: 'updateScore',
+          contestant: name,
+          judge: matchedJudge,
+          value: parseFloat(value),
+          number: numStr,
+        });
+      }
+      continue;
+    }
+
+    // Pattern: "海选号 所有老师/所有裁判 分数" -> update all judges
+    const allJudgesMatch = line.match(/^(\d+)\s+(?:所有老师|所有裁判)\s+([\d.]+)$/);
+    if (allJudgesMatch) {
+      const [, number, value] = allJudgesMatch;
+      const numStr = number.trim();
+      const existingName = findContestantByNumber(numStr);
+      const scoreValue = parseFloat(value);
+      
+      if (existingName) {
+        // Update all judges for existing contestant
+        judges.forEach((judge: string) => {
           actions.push({
             type: 'updateScore',
             contestant: existingName,
-            judge: words[i + 1],
-            value: num,
+            judge,
+            value: scoreValue,
+            number: numStr,
           });
-        } else {
-          actions.push({
-            type: 'addContestant',
-            name: words[i],
-          });
+        });
+      } else {
+        // Add new and update all judges
+        const name = generateName(numStr);
+        actions.push({
+          type: 'addContestant',
+          name,
+          number: numStr,
+        });
+        judges.forEach((judge: string) => {
           actions.push({
             type: 'updateScore',
-            contestant: words[i],
-            judge: words[i + 1],
-            value: num,
+            contestant: name,
+            judge,
+            value: scoreValue,
+            number: numStr,
           });
-        }
-        i += 2;
+        });
       }
+      continue;
+    }
+
+    // Pattern: Just a number -> add contestant
+    const justNumberMatch = line.match(/^(\d+)$/);
+    if (justNumberMatch) {
+      const number = justNumberMatch[1];
+      if (!existingNumbers.has(number)) {
+        const name = generateName(number);
+        actions.push({
+          type: 'addContestant',
+          name,
+          number,
+        });
+      }
+      continue;
     }
   }
 

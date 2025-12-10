@@ -9,6 +9,7 @@ interface TableViewProps {
   contestants: string[];
   scores: Score[];
   contestantNumbers?: Record<string, string>;
+  matchName?: string;
   onUpdate: () => void;
   onBeforeUpdate?: () => Promise<void>;
   children?: React.ReactNode;
@@ -28,6 +29,7 @@ export default function TableView({
   contestants = [],
   scores = [],
   contestantNumbers = {},
+  matchName,
   onUpdate,
   onBeforeUpdate,
   children,
@@ -335,66 +337,105 @@ export default function TableView({
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      // Prepare data for Excel
-      const data: any[][] = [];
+      // Check if we're in WeChat browser or need shareable link
+      const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+      
+      if (isWeChat) {
+        // In WeChat, upload data and get shareable link
+        const matchData = {
+          match: {
+            name: matchName || `比赛_${matchId}`,
+            contestantNumbers,
+          },
+          judges,
+          contestants,
+          scores,
+        };
 
-      // Header row
-      const headerRow = [
-        "海选号",
-        "选手",
-        ...(Array.isArray(judges) ? judges : []),
-        "总分",
-      ];
-      data.push(headerRow);
-
-      // Data rows - use sortedContestants to maintain sort order
-      if (Array.isArray(sortedContestants)) {
-        sortedContestants.forEach((contestant) => {
-          try {
-            const safeContestant = String(contestant || "");
-            const row = [
-              (contestantNumbers && contestantNumbers[safeContestant]) || "",
-              safeContestant,
-            ];
-            if (Array.isArray(judges)) {
-              judges.forEach((judge) => {
-                try {
-                  const score = getScore(safeContestant, judge);
-                  row.push(score !== null ? String(score) : "");
-                } catch (error) {
-                  console.error(
-                    `Error getting score for ${safeContestant}/${judge}:`,
-                    error
-                  );
-                  row.push("");
-                }
-              });
-            }
-            try {
-              row.push(calculateTotal(safeContestant).toFixed(2));
-            } catch (error) {
-              console.error(
-                `Error calculating totals for ${safeContestant}:`,
-                error
-              );
-              row.push("0.00");
-            }
-            data.push(row);
-          } catch (error) {
-            console.error(`Error processing contestant ${contestant}:`, error);
-          }
+        const response = await fetch('/api/export-excel/upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            matchData,
+            matchId,
+          }),
         });
+
+        if (!response.ok) {
+          throw new Error('Failed to generate download link');
+        }
+
+        const { downloadUrl } = await response.json();
+        
+        // Show the link to user
+        const linkText = `请复制以下链接到浏览器打开下载：\n\n${downloadUrl}`;
+        if (confirm(linkText + '\n\n点击确定复制链接到剪贴板')) {
+          await navigator.clipboard.writeText(downloadUrl);
+          alert('链接已复制到剪贴板！请粘贴到浏览器中打开下载。');
+        }
+      } else {
+        // Normal browser, use client-side export
+        // Prepare data for Excel
+        const data: any[][] = [];
+
+        // Header row
+        const headerRow = [
+          "海选号",
+          ...(Array.isArray(judges) ? judges : []),
+          "总分",
+        ];
+        data.push(headerRow);
+
+        // Data rows - use sortedContestants to maintain sort order
+        if (Array.isArray(sortedContestants)) {
+          sortedContestants.forEach((contestant) => {
+            try {
+              const safeContestant = String(contestant || "");
+              const row = [
+                (contestantNumbers && contestantNumbers[safeContestant]) || "",
+              ];
+              if (Array.isArray(judges)) {
+                judges.forEach((judge) => {
+                  try {
+                    const score = getScore(safeContestant, judge);
+                    row.push(score !== null ? String(score) : "");
+                  } catch (error) {
+                    console.error(
+                      `Error getting score for ${safeContestant}/${judge}:`,
+                      error
+                    );
+                    row.push("");
+                  }
+                });
+              }
+              try {
+                row.push(calculateTotal(safeContestant).toFixed(2));
+              } catch (error) {
+                console.error(
+                  `Error calculating totals for ${safeContestant}:`,
+                  error
+                );
+                row.push("0.00");
+              }
+              data.push(row);
+            } catch (error) {
+              console.error(`Error processing contestant ${contestant}:`, error);
+            }
+          });
+        }
+
+        // Create workbook and worksheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "评分表");
+
+        // Export
+        XLSX.writeFile(wb, `比赛评分表_${Date.now()}.xlsx`);
       }
-
-      // Create workbook and worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(data);
-      XLSX.utils.book_append_sheet(wb, ws, "评分表");
-
-      // Export
-      XLSX.writeFile(wb, `比赛评分表_${Date.now()}.xlsx`);
     } catch (error) {
       console.error("Error exporting Excel:", error);
       alert("导出失败，请重试");
@@ -517,8 +558,8 @@ export default function TableView({
     if (!editingRow) return;
 
     try {
-      if (!editingRow.contestant || !editingRow.contestant.trim()) {
-        alert("请输入选手名称");
+      if (!editingRow.number || !editingRow.number.trim()) {
+        alert("请输入海选号");
         return;
       }
 
@@ -530,7 +571,14 @@ export default function TableView({
       }
 
       const now = Date.now();
-      const contestantName = editingRow.contestant.trim();
+      const number = editingRow.number.trim();
+      // Auto-generate unique name from number (handle duplicates)
+      let contestantName = `选手-${number}`;
+      let counter = 1;
+      while (match.contestants.includes(contestantName)) {
+        contestantName = `选手-${number}-${counter}`;
+        counter++;
+      }
 
       // Validate and parse scores
       const scoreValues: Record<string, number | null> = {};
@@ -549,16 +597,12 @@ export default function TableView({
       }
 
       if (editingRow.isNew) {
-        // Add new contestant
-        if (match.contestants.includes(contestantName)) {
-          alert("该选手已存在");
-          return;
-        }
-
+        // Numbers can repeat, so no need to check for duplicates
+        // Just ensure the generated name is unique
         const updatedContestants = [...match.contestants, contestantName];
         const updatedNumbers = {
           ...(match.contestantNumbers || {}),
-          [contestantName]: editingRow.number.trim(),
+          [contestantName]: number,
         };
 
         if (onBeforeUpdate) {
@@ -590,7 +634,8 @@ export default function TableView({
       } else {
         // Update existing contestant
         const oldName = editingRow.originalName!;
-        const newName = contestantName;
+
+        // Numbers can repeat, so no need to check for conflicts
 
         if (onBeforeUpdate) {
           try {
@@ -600,102 +645,39 @@ export default function TableView({
           }
         }
 
-        if (oldName !== newName) {
-          // Name changed, need to update all references
-          if (match.contestants.includes(newName) && oldName !== newName) {
-            alert("该选手名称已存在");
-            return;
-          }
+        // Only update number and scores, keep the same name
+        const updatedNumbers = {
+          ...(match.contestantNumbers || {}),
+          [oldName]: number,
+        };
 
-          const updatedContestants = match.contestants.map((c) =>
-            c === oldName ? newName : c
+        await db.matches.update(matchId, {
+          contestantNumbers: updatedNumbers,
+          updatedAt: now,
+        });
+
+        // Update scores
+        for (const judge of judges) {
+          const existingScore = scores.find(
+            (s) => s.contestant === oldName && s.judge === judge
           );
-
-          // Update scores - first update contestant name in all scores
-          const allScores = await db.scores
-            .where("matchId")
-            .equals(matchId)
-            .toArray();
-          for (const score of allScores) {
-            if (score.contestant === oldName) {
-              await db.scores.update(score.id!, {
-                contestant: newName,
-                updatedAt: now,
-              });
-            }
-          }
-
-          // Update contestantNumbers
-          const updatedNumbers = { ...(match.contestantNumbers || {}) };
-          if (updatedNumbers[oldName] !== undefined) {
-            updatedNumbers[newName] = editingRow.number.trim();
-            delete updatedNumbers[oldName];
-          } else {
-            updatedNumbers[newName] = editingRow.number.trim();
-          }
-
-          await db.matches.update(matchId, {
-            contestants: updatedContestants,
-            contestantNumbers: updatedNumbers,
-            updatedAt: now,
-          });
-
-          // Update scores for new name
-          for (const judge of judges) {
-            const existingScore = allScores.find(
-              (s) => s.contestant === oldName && s.judge === judge
-            );
-            if (existingScore) {
+          if (existingScore) {
+            if (scoreValues[judge] === null) {
+              await db.scores.delete(existingScore.id!);
+            } else {
               await db.scores.update(existingScore.id!, {
-                contestant: newName,
-                value: scoreValues[judge],
-                updatedAt: now,
-              });
-            } else if (scoreValues[judge] !== null) {
-              await db.scores.add({
-                matchId,
-                contestant: newName,
-                judge,
                 value: scoreValues[judge],
                 updatedAt: now,
               });
             }
-          }
-        } else {
-          // Only number and scores changed
-          const updatedNumbers = {
-            ...(match.contestantNumbers || {}),
-            [oldName]: editingRow.number.trim(),
-          };
-
-          await db.matches.update(matchId, {
-            contestantNumbers: updatedNumbers,
-            updatedAt: now,
-          });
-
-          // Update scores
-          for (const judge of judges) {
-            const existingScore = scores.find(
-              (s) => s.contestant === oldName && s.judge === judge
-            );
-            if (existingScore) {
-              if (scoreValues[judge] === null) {
-                await db.scores.delete(existingScore.id!);
-              } else {
-                await db.scores.update(existingScore.id!, {
-                  value: scoreValues[judge],
-                  updatedAt: now,
-                });
-              }
-            } else if (scoreValues[judge] !== null) {
-              await db.scores.add({
-                matchId,
-                contestant: oldName,
-                judge,
-                value: scoreValues[judge],
-                updatedAt: now,
-              });
-            }
+          } else if (scoreValues[judge] !== null) {
+            await db.scores.add({
+              matchId,
+              contestant: oldName,
+              judge,
+              value: scoreValues[judge],
+              updatedAt: now,
+            });
           }
         }
       }
@@ -754,16 +736,14 @@ export default function TableView({
 
   const handleSort = (column: "number" | "total") => {
     if (sortColumn === column) {
-      // Toggle direction or clear
-      if (sortDirection === "asc") {
-        setSortDirection("desc");
-      } else if (sortDirection === "desc") {
-        setSortColumn(null);
-        setSortDirection(null);
-      }
+      // Clear sort if clicking the same column again
+      setSortColumn(null);
+      setSortDirection(null);
     } else {
+      // Set column and direction based on column type
       setSortColumn(column);
-      setSortDirection("asc");
+      // 海选号: ascending (lower to higher), 总分: descending (higher to lower)
+      setSortDirection(column === "number" ? "asc" : "desc");
     }
   };
 
@@ -873,27 +853,6 @@ export default function TableView({
                                 })
                               }
                               placeholder="输入海选号"
-                              autoFocus={!editingRow.isNew}
-                              style={{ width: "100%" }}
-                            />
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style={{ padding: "0.5rem", fontWeight: 600 }}>
-                            选手名称：
-                          </td>
-                          <td style={{ padding: "0.5rem" }}>
-                            <input
-                              className="input"
-                              type="text"
-                              value={editingRow.contestant}
-                              onChange={(e) =>
-                                setEditingRow({
-                                  ...editingRow,
-                                  contestant: e.target.value,
-                                })
-                              }
-                              placeholder="输入选手名称"
                               autoFocus={editingRow.isNew}
                               style={{ width: "100%" }}
                             />
@@ -1024,7 +983,6 @@ export default function TableView({
                   {getSortIcon("number")}
                 </i>
               </th>
-              <th>选手</th>
               {judges.map((judge) => (
                 <th key={judge}>{judge}</th>
               ))}
@@ -1082,7 +1040,6 @@ export default function TableView({
                       handleNumberDoubleClick(safeContestant);
                     }}
                     style={{
-                      minWidth: "5rem",
                       background:
                         sortColumn === "number"
                           ? "rgba(138, 43, 226, 0.15)"
@@ -1109,29 +1066,6 @@ export default function TableView({
                       (contestantNumbers &&
                         contestantNumbers[safeContestant]) ||
                       "-"
-                    )}
-                  </td>
-                  <td style={{ fontWeight: 600, position: "relative" }}>
-                    {safeContestant}
-                    {sortColumn && sortDirection && (
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "1.5rem",
-                          height: "1.5rem",
-                          borderRadius: "50%",
-                          background: "rgba(207, 182, 231, 1)",
-                          color: "#000",
-                          fontSize: "0.75rem",
-                          fontWeight: "bold",
-                          marginLeft: "0.5rem",
-                          float: "right",
-                        }}
-                      >
-                        {index + 1}
-                      </span>
                     )}
                   </td>
                   {Array.isArray(judges) &&
@@ -1192,11 +1126,43 @@ export default function TableView({
                         sortColumn === "total"
                           ? "rgba(138, 43, 226, 0.15)"
                           : "transparent",
+                      position: "relative",
                     }}
                   >
                     {(() => {
                       try {
-                        return calculateTotal(safeContestant).toFixed(2);
+                        const total = calculateTotal(safeContestant).toFixed(2);
+                        return (
+                          <div
+                            style={{
+                              display: "flex",
+                              minWidth: "5rem",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            {sortColumn === "total" && sortDirection && (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  width: "1.5rem",
+                                  height: "1.5rem",
+                                  borderRadius: "50%",
+                                  background: "rgba(207, 182, 231, 1)",
+                                  color: "#000",
+                                  fontSize: "0.75rem",
+                                  fontWeight: "bold",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {index + 1}
+                              </span>
+                            )}
+                            <span>{total}</span>
+                          </div>
+                        );
                       } catch (error) {
                         return "0.00";
                       }
@@ -1238,7 +1204,7 @@ export default function TableView({
                 }}
                 onClick={handleAddNewRow}
                 title="添加选手"
-                colSpan={judges.length + 3 + (showOperations ? 1 : 0)}
+                colSpan={judges.length + 2 + (showOperations ? 1 : 0)}
               >
                 +
               </td>
@@ -1315,27 +1281,6 @@ export default function TableView({
                               })
                             }
                             placeholder="输入海选号"
-                            autoFocus={!editingRow.isNew}
-                            style={{ width: "100%" }}
-                          />
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: "0.5rem", fontWeight: 600 }}>
-                          选手名称：
-                        </td>
-                        <td style={{ padding: "0.5rem" }}>
-                          <input
-                            className="input"
-                            type="text"
-                            value={editingRow.contestant}
-                            onChange={(e) =>
-                              setEditingRow({
-                                ...editingRow,
-                                contestant: e.target.value,
-                              })
-                            }
-                            placeholder="输入选手名称"
                             autoFocus={editingRow.isNew}
                             style={{ width: "100%" }}
                           />

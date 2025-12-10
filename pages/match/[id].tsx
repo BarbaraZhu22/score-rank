@@ -210,6 +210,7 @@ export default function MatchDetail() {
         contestants={matchData.contestants}
         scores={matchData.scores}
         contestantNumbers={matchData.match.contestantNumbers}
+        matchName={matchData.match.name}
         onUpdate={loadMatchData}
         onBeforeUpdate={saveHistorySnapshot}
       >

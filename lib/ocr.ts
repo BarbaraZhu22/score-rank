@@ -21,3 +21,4 @@ export async function runOCR(file: File): Promise<string> {
   }
 }
 
+

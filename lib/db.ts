@@ -61,13 +61,15 @@ export const db = new CompetitionDatabase();
 export async function createMatch(
   name: string,
   judges: string[] = [],
-  contestants: string[] = []
+  contestants: string[] = [],
+  contestantNumbers?: Record<string, string>
 ): Promise<number> {
   const now = Date.now();
   const matchId = await db.matches.add({
     name,
     judges,
     contestants,
+    contestantNumbers,
     createdAt: now,
     updatedAt: now,
   });

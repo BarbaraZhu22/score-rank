@@ -9,7 +9,7 @@ export default function Home() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newMatchName, setNewMatchName] = useState('');
   const [judgeNames, setJudgeNames] = useState('');
-  const [contestantNames, setContestantNames] = useState('');
+  const [contestantCount, setContestantCount] = useState('');
   const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
   const [deleteConfirmCount, setDeleteConfirmCount] = useState(0);
 
@@ -28,20 +28,51 @@ export default function Home() {
       return;
     }
 
-    // Support both Chinese comma (，) and English comma (,)
+    // Support both Chinese comma (，) and English comma (,) and newlines
     const judgeList = judgeNames.split(/[，,\n]/).map(s => s.trim()).filter(s => s);
-    const contestantList = contestantNames.split(/[，,\n]/).map(s => s.trim()).filter(s => s);
 
     if (judgeList.length === 0) {
       alert('请输入至少一个裁判名称');
       return;
     }
 
-    const matchId = await createMatch(newMatchName, judgeList, contestantList);
+    // Parse contestant count - try to convert to number
+    let count = 0;
+    if (contestantCount.trim()) {
+      const parsed = parseInt(contestantCount.trim(), 10);
+      if (isNaN(parsed) || parsed < 1) {
+        alert('请输入有效的海选人数（正整数）');
+        return;
+      }
+      count = parsed;
+    }
+
+    // Generate numbers from 1 to count
+    const numberList: string[] = [];
+    for (let i = 1; i <= count; i++) {
+      numberList.push(i.toString());
+    }
+
+    // Auto-generate unique contestant names from numbers
+    const contestantList: string[] = [];
+    const contestantNumbersMap: Record<string, string> = {};
+    numberList.forEach((number) => {
+      let name = `选手-${number}`;
+      let counter = 1;
+      // Ensure unique name even if numbers repeat
+      while (contestantList.includes(name)) {
+        name = `选手-${number}-${counter}`;
+        counter++;
+      }
+      contestantList.push(name);
+      contestantNumbersMap[name] = number;
+    });
+
+    const matchId = await createMatch(newMatchName, judgeList, contestantList, contestantNumbersMap);
     setShowCreateModal(false);
     setNewMatchName('');
     setJudgeNames('');
-    setContestantNames('');
+    setContestantCount('');
     router.push(`/match/${matchId}`);
   };
 
@@ -159,14 +190,14 @@ export default function Home() {
               </div>
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>
-                  选手名称（用逗号或换行分隔, 可先不填写）
+                  输入海选人数（可先不填写）
                 </label>
-                <textarea
+                <input
                   className="input"
-                  rows={3}
-                  value={contestantNames}
-                  onChange={e => setContestantNames(e.target.value)}
-                  placeholder="例如：张三, 李四, 王五"
+                  type="text"
+                  value={contestantCount}
+                  onChange={e => setContestantCount(e.target.value)}
+                  placeholder="例如：20（将创建编号1-20的选手）"
                 />
               </div>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>

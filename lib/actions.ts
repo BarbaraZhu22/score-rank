@@ -2,10 +2,26 @@ import { db, Match, Score } from './db';
 
 // Action type definitions
 export type Action =
-  | { type: 'updateScore'; contestant: string; judge: string; value: number | null }
-  | { type: 'addContestant'; name: string }
-  | { type: 'removeContestant'; name: string }
+  | { type: 'updateScore'; contestant: string; judge: string; value: number | null; number?: string }
+  | { type: 'addContestant'; name: string; number?: string }
+  | { type: 'removeContestant'; name: string; number?: string }
   | { type: 'updateContestantNumber'; contestant: string; number: string };
+
+// Helper function to find contestant by number
+// Returns the first matching contestant name, or null if not found
+function findContestantByNumber(match: Match, number: string): string | null {
+  if (!match.contestantNumbers) return null;
+  const entry = Object.entries(match.contestantNumbers).find(([_, n]) => n === number);
+  return entry ? entry[0] : null;
+}
+
+// Helper function to find all contestants by number (in case of duplicates)
+function findAllContestantsByNumber(match: Match, number: string): string[] {
+  if (!match.contestantNumbers) return [];
+  return Object.entries(match.contestantNumbers)
+    .filter(([_, n]) => n === number)
+    .map(([name, _]) => name);
+}
 
 // Apply a single action to the database
 async function applyAction(matchId: number, action: Action): Promise<void> {
@@ -18,13 +34,27 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
 
   switch (action.type) {
     case 'updateScore': {
-      // Find the actual contestant and judge names (case-insensitive match)
+      // Find the actual contestant - try by number first, then by name
       const normalizeName = (name: string): string => name.trim().toLowerCase();
-      const normalizedContestantName = normalizeName(action.contestant);
       const normalizedJudgeName = normalizeName(action.judge);
-      
-      const actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedContestantName) || action.contestant;
       const actualJudgeName = match.judges.find(j => normalizeName(j) === normalizedJudgeName) || action.judge;
+      
+      let actualContestantName: string;
+      if (action.number) {
+        // Try to find by number first
+        const foundByName = findContestantByNumber(match, action.number);
+        if (foundByName) {
+          actualContestantName = foundByName;
+        } else {
+          // Number not found, try by name
+          const normalizedContestantName = normalizeName(action.contestant);
+          actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedContestantName) || action.contestant;
+        }
+      } else {
+        // No number provided, match by name
+        const normalizedContestantName = normalizeName(action.contestant);
+        actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedContestantName) || action.contestant;
+      }
 
       // Find existing score or create new one
       // Smart merge: only update if existing value is null, or explicitly overwrite
@@ -66,15 +96,23 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
     }
 
     case 'addContestant': {
-      // Case-insensitive check for duplicates
+      // Case-insensitive check for duplicates by name
       const normalizeName = (name: string): string => name.trim().toLowerCase();
       const normalizedActionName = normalizeName(action.name);
       const existingContestant = match.contestants.find(c => normalizeName(c) === normalizedActionName);
       
       if (!existingContestant) {
         const updatedContestants = [...match.contestants, action.name];
+        const updatedNumbers = { ...(match.contestantNumbers || {}) };
+        
+        // If number is provided, set it
+        if (action.number) {
+          updatedNumbers[action.name] = action.number;
+        }
+        
         await db.matches.update(matchId, {
           contestants: updatedContestants,
+          contestantNumbers: updatedNumbers,
           updatedAt: now,
         });
 
@@ -124,12 +162,22 @@ async function applyAction(matchId: number, action: Action): Promise<void> {
     }
 
     case 'updateContestantNumber': {
-      // Find the actual contestant name (case-insensitive match)
-      const normalizeName = (name: string): string => name.trim().toLowerCase();
-      const normalizedActionName = normalizeName(action.contestant);
-      const actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedActionName) || action.contestant;
+      // Find the actual contestant - try by number first, then by name
+      let actualContestantName: string;
       
-      // Update or add contestant number
+      // First try to find by the provided number (if it exists, update that contestant)
+      const existingByNumber = findContestantByNumber(match, action.number);
+      if (existingByNumber) {
+        // If number already exists, update that contestant's number
+        actualContestantName = existingByNumber;
+      } else {
+        // Number doesn't exist, find by contestant name
+        const normalizeName = (name: string): string => name.trim().toLowerCase();
+        const normalizedActionName = normalizeName(action.contestant);
+        actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedActionName) || action.contestant;
+      }
+      
+      // Update or add contestant number (numbers can repeat, so this is fine)
       const updatedNumbers = { ...(match.contestantNumbers || {}) };
       updatedNumbers[actualContestantName] = action.number;
       
@@ -185,12 +233,20 @@ export async function applyActions(matchId: number, actions: Action[]): Promise<
         const existingName = match.contestants.find(c => normalizeName(c) === normalizedName);
         if (!existingName) {
           const updatedContestants = [...match.contestants, action.name];
+          const updatedNumbers = { ...(match.contestantNumbers || {}) };
+          
+          // If number is provided, set it
+          if (action.number) {
+            updatedNumbers[action.name] = action.number;
+          }
+          
           await db.matches.update(matchId, {
             contestants: updatedContestants,
+            contestantNumbers: updatedNumbers,
             updatedAt: Date.now(),
           });
           // Update cache
-          cachedMatch = { ...match, contestants: updatedContestants };
+          cachedMatch = { ...match, contestants: updatedContestants, contestantNumbers: updatedNumbers };
           processedContestants.add(normalizedName);
           
           await db.history.add({
@@ -207,8 +263,16 @@ export async function applyActions(matchId: number, actions: Action[]): Promise<
     // For updateContestantNumber, use cached match and update cache
     if (action.type === 'updateContestantNumber') {
       const match = await getMatch();
-      const normalizedContestantName = normalizeName(action.contestant);
-      const actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedContestantName) || action.contestant;
+      
+      // Try to find by number first, then by name
+      let actualContestantName: string;
+      const existingByNumber = findContestantByNumber(match, action.number);
+      if (existingByNumber) {
+        actualContestantName = existingByNumber;
+      } else {
+        const normalizedContestantName = normalizeName(action.contestant);
+        actualContestantName = match.contestants.find(c => normalizeName(c) === normalizedContestantName) || action.contestant;
+      }
       
       const updatedNumbers = { ...(match.contestantNumbers || {}) };
       updatedNumbers[actualContestantName] = action.number;
