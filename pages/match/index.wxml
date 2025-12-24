@@ -2,15 +2,12 @@
 <view class="container match-detail-page" wx:if="{{matchData}}">
   <view class="match-header">
     <view class="header-actions">
-      <button class="btn btn-non-outline" bindtap="navigateBack">← 返回列表</button>
-      <button 
+      <text 
         class="btn btn-outline refresh-btn" 
         bindtap="handleRefresh"
         disabled="{{isRefreshing}}"
-      >
-        <text wx:if="{{isRefreshing}}" class="loading"></text>
-        {{isRefreshing ? '刷新中...' : '🔄 刷新'}}
-      </button>
+      > <text wx:if="{{isRefreshing}}" class="loading"></text> {{isRefreshing ? '刷新中...' : '🔄 刷新'}}
+      </text>
     </view>
     <view class="card">
       <text class="match-title">{{matchData.match.name}}</text>
@@ -25,7 +22,7 @@
   </view>
 
   <table-view 
-    match-id="{{matchId || matchUniqueId}}"
+    match-id="{{matchId}}"
     judges="{{matchData.judges}}"
     contestants="{{matchData.contestants}}"
     scores="{{matchData.scores}}"

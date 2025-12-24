@@ -1,82 +1,446 @@
 /* components/table-view/index.wxss */
+/* 基础样式重置 */
+page {
+  box-sizing: border-box;
+}
+
+.card {
+  padding: 30rpx 20rpx;
+  background-color: #ffffff;
+  border-radius: 12rpx;
+  margin: 20rpx;
+  box-sizing: border-box;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.mb-3 {
+  margin-bottom: 30rpx;
+}
+
+.card-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.btn {
+  padding: 12rpx 20rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  border: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-outline {
+  background-color: #ffffff;
+  border: 1rpx solid #374c62;
+  color: #374c62;
+}
+
+.btn-special {
+  background-color: #374c62;
+  color: #ffffff;
+}
+
 .table-header-actions {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.table-scroll {
+/* 表格容器：实现表头冻结+自动填满父容器 */
+.table-container {
   width: 100%;
-  max-height: 70vh;
+  height: calc(100vh - 450rpx);
+  border: 1rpx solid #e0e0e0;
+  border-radius: 12rpx;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.table {
+/* 横向滚动容器：包裹表头+内容，实现整体横向滚动（自动填满） */
+.table-h-scroll {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  background: white;
-  border-radius: 16rpx;
-  min-width: 600rpx;
+  height: 100%;
 }
 
-.table th,
-.table td {
-  padding: 24rpx 32rpx;
-  text-align: left;
-  border-bottom: 2rpx solid #e0e0e0;
-  white-space: nowrap;
-}
-
-.table th {
-  background: #374c62 !important;
-  color: white;
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 28rpx;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.table td.editable {
-  cursor: pointer;
+/* 表格包裹层：自动填满，取消固定最小宽度，由列宽自动撑开 */
+.table-wrap {
   position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-.table td.editable:active {
+/* 表头：固定高度，flex布局自动填满，不随内容纵向滚动 */
+.table-header {
+  display: flex;
+  background: #374c62;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+  height: 80rpx; /* 固定表头高度 */
+  align-items: center;
+  width: 100%; /* 自动填满父容器 */
+}
+
+.table-header-cell {
+  padding: 0 10rpx;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 24rpx;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  border-right: 1rpx solid rgba(255, 255, 255, 0.2);
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.table-header-cell:last-child {
+  border-right: none;
+}
+
+/* 纵向滚动容器：仅滚动表格内容，宽度自动填满 */
+.table-v-scroll {
+  width: 100%;
+  height: calc(100vh - 450rpx - 80rpx); /* 总高度 - 表头高度 */
+}
+
+/* 表格内容：自动填满 */
+.table-body {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* 空数据提示 */
+.empty-tip {
+  padding: 50rpx 0;
+  text-align: center;
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 表格最后一行：添加选手样式（小型加号） */
+.add-contestant-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70rpx; /* 与普通选手行高度一致 */
+  border-bottom: 1rpx solid #e0e0e0;
+  background-color: #fafafa; /* 轻微底色区分 */
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%; /* 自动填满 */
+}
+
+.add-contestant-row:active {
+  background-color: #f0f0f0;
+}
+
+.add-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 70rpx;
+  font-size: 28rpx;
+  width: 100%; /* 自动填满 */
+}
+
+/* 小型加号按钮样式 */
+.add-btn {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%; /* 圆形加号 */
+  background-color: #374c62;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* 选手行：flex布局自动填满，列宽适配 */
+.table-row {
+  display: flex;
+  border-bottom: 1rpx solid #e0e0e0;
+  min-height: 70rpx;
+  align-items: center;
+  background-color: #ffffff;
+  box-sizing: border-box;
+  width: 100%; /* 自动填满父容器 */
+}
+
+.table-row.even-row {
+  background-color: #fff9e6;
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+/* 统一列宽优化：
+   - rank/operation：固定90rpx
+   - 海选号/总分：固定110rpx
+   - 裁判列：flex:1 自动分配剩余宽度（适配不定数量）
+*/
+.table-cell-rank,
+.table-header-cell-rank {
+  width: 90rpx;
+  flex: 0 0 90rpx; /* 固定宽度，不伸缩 */
+}
+
+.table-cell-first,
+.table-header-cell-first {
+  width: 110rpx;
+  flex: 0 0 110rpx; /* 固定宽度，不伸缩 */
+}
+
+.table-cell-judge,
+.table-header-cell-judge {
+  flex: 1; /* 自动分配剩余宽度，适配不定裁判数 */
+  min-width: 90rpx; /* 最小宽度，保证显示美观 */
+}
+
+.table-cell-total,
+.table-header-cell-total {
+  width: 110rpx;
+  flex: 0 0 110rpx; /* 固定宽度，不伸缩 */
+}
+
+.table-cell-operation,
+.table-header-cell-operation {
+  width: 90rpx;
+  flex: 0 0 90rpx; /* 固定宽度，不伸缩 */
+}
+
+.table-cell {
+  padding: 0 10rpx;
+  font-size: 24rpx;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  word-wrap: break-word;
+  word-break: break-all;
+  border-right: 1rpx solid #f0f0f0;
+  box-sizing: border-box;
+  color: #333333;
+  height: 70rpx;
+}
+
+.table-cell:last-child {
+  border-right: none;
+}
+
+.table-cell.editable {
+  position: relative;
+  cursor: pointer;
+}
+
+.table-cell.editable:active {
   background: #fff3cd;
 }
 
-.table td.empty {
+.table-cell.empty {
   background: #f8f9fa;
   color: #6c757d;
 }
 
-.cell-input {
-  width: 100%;
-  padding: 8rpx;
-  border: 4rpx solid #000;
+/* 排名样式 */
+.rank-circle {
+  width: 45rpx;
+  height: 45rpx;
+  border-radius: 50%;
+  background-color: #e6e6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rank-text {
+  color: #6666cc;
+  font-weight: 700;
+  font-size: 24rpx;
+}
+
+.table-row.rank-1 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 215, 0, 0.3) 0%,
+    rgba(255, 255, 255, 1) 10%
+  );
+}
+
+.table-row.rank-2 {
+  background: linear-gradient(
+    90deg,
+    rgba(192, 192, 192, 0.3) 0%,
+    rgba(255, 255, 255, 1) 10%
+  );
+}
+
+.table-row.rank-3 {
+  background: linear-gradient(
+    90deg,
+    rgba(205, 127, 50, 0.3) 0%,
+    rgba(255, 255, 255, 1) 10%
+  );
+}
+
+.table-row.rank-top10 {
+  background: rgba(240, 248, 255, 0.5);
+}
+
+/* 弹窗输入框样式 */
+.form-input {
+  width: 288rpx;
+  height: 60rpx;
+  padding: 0 15rpx;
+  border: 1rpx solid #e0e0e0;
   border-radius: 8rpx;
-  font-size: 28rpx;
+  font-size: 26rpx;
+  box-sizing: border-box;
+  color: #333333;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-.total-cell {
-  font-weight: 600;
-}
-
-.operation-col {
-  width: 80rpx;
-  font-size: 30rpx;
+.input-placeholder {
+  color: #999999;
+  font-size: 24rpx;
 }
 
 .delete-btn {
   background: none;
   border: none;
-  cursor: pointer;
   padding: 4rpx;
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: bold;
   color: #ff6b6b;
   line-height: 1;
+  cursor: pointer;
 }
 
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 40rpx 20rpx;
+  box-sizing: border-box;
+}
+
+.modal-content {
+  background-color: #ffffff;
+  border-radius: 12rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  width: 100%;
+}
+
+.cell-modal-content {
+  max-width: 450rpx;
+  width: 90%;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25rpx 25rpx 20rpx;
+  border-bottom: 1rpx solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.modal-close {
+  font-size: 34rpx;
+  color: #999999;
+  cursor: pointer;
+}
+
+.modal-form-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.vertical-form {
+  padding: 25rpx;
+  width: 100%;
+}
+
+.form-row {
+  display: flex;
+  border-bottom: 1rpx solid #f0f0f0;
+  padding: 15rpx 0;
+  align-items: center;
+}
+
+.form-row:last-child {
+  border-bottom: none;
+}
+
+.form-row-total {
+  font-weight: 600;
+  color: #333333;
+}
+
+.form-label-col {
+  width: 120rpx;
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #666666;
+  overflow: hidden;
+}
+
+.form-value-col {
+  flex: 1;
+  font-size: 26rpx;
+  color: #333333;
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 20rpx;
+  justify-content: flex-end;
+  padding: 20rpx 25rpx 25rpx;
+  border-top: 1rpx solid #e0e0e0;
+  flex-shrink: 0;
+  background-color: #ffffff;
+}

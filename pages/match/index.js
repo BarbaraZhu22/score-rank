@@ -5,7 +5,6 @@ const { applyActions } = require('../../utils/actions');
 Page({
   data: {
     matchId: null,
-    matchUniqueId: null,
     matchData: null,
     userId: '',
     isAdmin: false,
@@ -14,7 +13,7 @@ Page({
   },
 
   onLoad(options) {
-    const matchId = options.id || options._id;
+    const matchId = options._id || options.id;
     if (!matchId) {
       wx.showToast({
         title: '比赛ID不存在',
@@ -26,9 +25,9 @@ Page({
       return;
     }
     
+    console.log("Match page onLoad, matchId:", matchId);
     this.setData({ 
-      matchId: options.id,
-      matchUniqueId: options._id || matchId
+      matchId: matchId
     });
     
     this.loadUserId();
@@ -47,15 +46,12 @@ Page({
   },
 
   async checkPermissions() {
-    const { matchId, matchUniqueId, isAdmin } = this.data;
+    const { matchId, isAdmin } = this.data;
+    
+    if (!matchId) return;
     
     try {
-      let match;
-      if (matchUniqueId && !matchId) {
-        match = await db.matches.getByUniqueId(matchUniqueId);
-      } else {
-        match = await db.matches.get(matchId || matchUniqueId);
-      }
+      const match = await db.matches.get(matchId);
       
       if (!match) {
         wx.showToast({
@@ -85,22 +81,12 @@ Page({
   },
 
   async loadMatchData() {
-    const { matchId, matchUniqueId } = this.data;
-    const checkId = matchId || matchUniqueId;
+    const { matchId } = this.data;
     
-    if (!checkId) return;
+    if (!matchId) return;
     
     try {
-      let data;
-      if (matchUniqueId && !matchId) {
-        const match = await db.matches.getByUniqueId(matchUniqueId);
-        if (!match) {
-          throw new Error('Match not found');
-        }
-        data = await getMatchData(match.id);
-      } else {
-        data = await getMatchData(checkId);
-      }
+      const data = await getMatchData(matchId);
       
       this.setData({ 
         matchData: data,
@@ -116,15 +102,14 @@ Page({
   },
 
   async handleRefresh() {
-    const { matchId, matchUniqueId, matchData } = this.data;
-    const checkId = matchId || matchUniqueId;
+    const { matchId, matchData } = this.data;
     
-    if (!checkId || !matchData) return;
+    if (!matchId || !matchData) return;
     
     this.setData({ isRefreshing: true });
     
     try {
-      const refreshedData = await refreshMatchData(checkId, matchData);
+      const refreshedData = await refreshMatchData(matchId, matchData);
       
       this.setData({ 
         matchData: refreshedData,

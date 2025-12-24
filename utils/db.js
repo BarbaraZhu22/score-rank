@@ -65,12 +65,16 @@ const db = {
         throw new Error('云开发数据库未初始化');
       }
       
+      if (!id) {
+        throw new Error('Match ID is required');
+      }
+      
       try {
         const result = await dbInstance.collection('matches').doc(id).get();
         return result.data || null;
       } catch (e) {
         console.error('Get match error:', e);
-        return null;
+        throw e;
       }
     },
     
@@ -275,14 +279,14 @@ const db = {
       return role ? role.isAdmin === true : false;
     },
     
-    // 添加管理员手机号
+    // 添加管理员密钥
     async addAdminPhone(phoneNumber) {
       if (!dbInstance) {
         throw new Error('云开发数据库未初始化');
       }
       
       try {
-        // 检查手机号是否已存在
+        // 检查密钥是否已存在
         const result = await dbInstance.collection('roles')
           .where({
             phoneNumber: phoneNumber
@@ -290,10 +294,10 @@ const db = {
           .get();
         
         if (result.data && result.data.length > 0) {
-          return false; // 手机号已存在
+          return false; // 密钥已存在
         }
         
-        // 添加管理员手机号记录
+        // 添加管理员密钥记录
         await dbInstance.collection('roles').add({
           data: {
             userId: null,
@@ -310,14 +314,14 @@ const db = {
       }
     },
     
-    // 验证手机号
+    // 验证密钥
     async verifyPhone(phoneNumber, userId) {
       if (!dbInstance) {
         throw new Error('云开发数据库未初始化');
       }
       
       try {
-        // 查找匹配的管理员手机号
+        // 查找匹配的管理员密钥
         const result = await dbInstance.collection('roles')
           .where({
             phoneNumber: phoneNumber,

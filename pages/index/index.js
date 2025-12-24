@@ -7,6 +7,7 @@ Page({
     showCreateModal: false,
     showAdminModal: false,
     showMasterKeyModal: false,
+    showAdminMenuModal: false,
     newMatchName: '',
     judgeNames: '',
     contestantCount: '',
@@ -131,7 +132,7 @@ Page({
     const { adminPhone, userId } = this.data;
     if (!adminPhone.trim()) {
       wx.showToast({
-        title: '请输入手机号',
+        title: '请输入密钥',
         icon: 'none'
       });
       return;
@@ -148,7 +149,7 @@ Page({
         this.loadMatches();
       } else {
         wx.showToast({
-          title: '手机号不正确',
+          title: '密钥不正确',
           icon: 'none'
         });
       }
@@ -260,7 +261,7 @@ Page({
       const matchId = await createMatch(newMatchName, judgeList, contestantList, contestantNumbersMap, userId, true);
       this.hideCreateModal();
       wx.navigateTo({
-        url: `/pages/match/index?id=${matchId}`
+        url: `/pages/match/index?_id=${matchId}`
       });
     } catch (e) {
       console.error('Failed to create match:', e);
@@ -282,7 +283,7 @@ Page({
     }
     
     const matchId = e.currentTarget.dataset.id;
-    const match = this.data.matches.find(m => m.id === matchId || m._id === matchId);
+    const match = this.data.matches.find(m => m._id === matchId);
     if (match) {
       this.setData({ 
         matchToDelete: match,
@@ -301,7 +302,7 @@ Page({
     }
     
     try {
-      const matchId = matchToDelete.id || matchToDelete._id;
+      const matchId = matchToDelete._id;
       await db.matches.delete(matchId);
       
       this.setData({ matchToDelete: null, deleteConfirmCount: 0 });
@@ -330,7 +331,27 @@ Page({
   navigateToMatch(e) {
     const matchId = e.currentTarget.dataset.id;
     wx.navigateTo({
-      url: `/pages/match/index?id=${matchId}`
+      url: `/pages/match/index?_id=${matchId}`
     });
+  },
+
+  stopPropagation() {},
+
+  showAdminMenuModal() {
+    this.setData({ showAdminMenuModal: true });
+  },
+
+  hideAdminMenuModal() {
+    this.setData({ showAdminMenuModal: false });
+  },
+
+  handleAdminMenuLogin() {
+    this.setData({ showAdminMenuModal: false });
+    this.showAdminModal();
+  },
+
+  handleAdminMenuMasterKey() {
+    this.setData({ showAdminMenuModal: false });
+    this.showMasterKeyModal();
   }
 });

@@ -4,55 +4,115 @@
     <text class="card-title">评分表</text>
     <view class="table-header-actions">
       <slot name="actions"></slot>
-      <button class="btn btn-s" bindtap="toggleOperations">
-        {{showOperations ? '隐藏操作' : '显示操作'}}
-      </button>
-      <button class="btn btn-special" bindtap="handleExportExcel">📊 导出 Excel</button>
+      <text class="btn btn-outline" bindtap="toggleRank">{{showRank ? '隐藏排名' : '显示排名'}}</text>
+      <text class="btn btn-special" bindtap="handleExportExcel">📊 导出 Excel</text>
     </view>
   </view>
 
+  <!-- 表格容器：表头冻结+内容滚动 -->
   <view class="table-container">
-    <scroll-view scroll-x="true" scroll-y="true" class="table-scroll">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>海选号</th>
-            <th wx:for="{{judges}}" wx:key="*this">{{item}}</th>
-            <th>总分</th>
-            <th wx:if="{{showOperations}}" class="operation-col">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr wx:for="{{contestants}}" wx:key="*this" wx:for-item="contestant" wx:for-index="cIndex">
-            <td>{{contestantNumbers[contestant] || '-'}}</td>
-            <td 
-              wx:for="{{judges}}" 
+    <scroll-view class="table-h-scroll" scroll-x="true">
+      <view class="table-wrap">
+        <!-- 表头 -->
+        <view class="table-header">
+          <view wx:if="{{showRank}}" class="table-header-cell table-cell-rank">排名</view>
+          <view class="table-header-cell table-cell-first">海选号</view>
+          <view class="table-header-cell table-cell-judge" wx:for="{{judges}}" wx:key="*this">{{item}}</view>
+          <view class="table-header-cell table-cell-total">总分</view>
+          <view wx:if="{{showOperations}}" class="table-header-cell table-cell-operation">操作</view>
+        </view>
+        <!-- 内容纵向滚动 -->
+        <scroll-view class="table-v-scroll" scroll-y="true" enable-back-to-top="{{true}}">
+          <view class="table-body">
+            <!-- 响应式列表：根据排名显示状态，渲染对应的预计算列表 -->
+            <view 
+              class="table-row {{getRankClass(contestant)}} {{index % 2 === 1 ? 'even-row' : ''}}" 
+              wx:for="{{currentContestantList}}" 
               wx:key="*this" 
-              wx:for-item="judge"
-              class="editable {{scoreMap[contestant + '|' + judge] === null || scoreMap[contestant + '|' + judge] === undefined ? 'empty' : ''}}"
-              bindtap="handleCellDoubleClick"
-              data-contestant="{{contestant}}"
-              data-judge="{{judge}}"
+              wx:for-item="contestant" 
+              wx:for-index="index"
             >
-              <input 
-                wx:if="{{editingCell && editingCell.contestant === contestant && editingCell.judge === judge}}"
-                class="cell-input"
-                type="digit"
-                value="{{editValue}}"
-                bindinput="onEditValueInput"
-                bindblur="handleCellBlur"
-                focus="{{true}}"
-              />
-              <text wx:else>{{scoreMap[contestant + '|' + judge] !== null && scoreMap[contestant + '|' + judge] !== undefined ? (scoreMap[contestant + '|' + judge].toFixed(2)) : '-'}}</text>
-            </td>
-            <td class="total-cell">{{(totalMap[contestant] || 0).toFixed(2)}}</td>
-            <td wx:if="{{showOperations}}" class="operation-col">
-              <text class="delete-btn" bindtap="handleDeleteContestant" data-contestant="{{contestant}}">×</text>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              <view wx:if="{{showRank}}" class="table-cell table-cell-rank">
+                <view class="rank-circle">
+                  <text class="rank-text">{{getRank(contestant)}}</text>
+                </view>
+              </view>
+              <view class="table-cell table-cell-first">{{contestantNumbers[contestant] || '-'}}</view>
+              <view 
+                class="table-cell table-cell-judge {{getCellClass(contestant, judge)}}"
+                wx:for="{{judges}}" 
+                wx:key="*this" 
+                wx:for-item="judge"
+                bindtap="handleCellDoubleClick"
+                data-contestant="{{contestant}}"
+                data-judge="{{judge}}"
+              >
+                <text>{{getScoreText(contestant, judge)}}</text>
+              </view>
+              <view class="table-cell table-cell-total">{{getTotalText(contestant)}}</view>
+              <view wx:if="{{showOperations}}" class="table-cell table-cell-operation">
+                <text class="delete-btn" bindtap="handleDeleteContestant" data-contestant="{{contestant}}">×</text>
+              </view>
+            </view>
+            <!-- 空数据提示 -->
+            <view wx:if="{{currentContestantList.length === 0}}" class="empty-tip">
+              暂无选手数据
+            </view>
+            <!-- 表格最后一行：小型加号添加按钮（居中） -->
+            <view class="table-row add-contestant-row" bindtap="handleAddContestant">
+              <!-- 跨列居中：宽度与表格一致，内容居中 -->
+              <view class="table-cell add-cell" style="border-right: none;">
+                <text class="add-btn">+</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
     </scroll-view>
   </view>
-</view>
 
+  <!-- 编辑/添加选手弹窗 -->
+  <view wx:if="{{showCellModal}}" class="modal-overlay" bindtap="handleCellModalClose">
+    <view class="modal-content cell-modal-content" catchtap="stopPropagation">
+      <view class="modal-header">
+        <text class="modal-title">{{isAddMode ? '添加选手评分' : '编辑选手评分'}}</text>
+        <text class="modal-close" bindtap="handleCellModalClose">×</text>
+      </view>
+      <scroll-view class="modal-form-scroll" scroll-y="true">
+        <view class="vertical-form">
+          <!-- 新增/编辑选手，海选号均不可编辑，直接显示 -->
+          <view class="form-row">
+            <view class="form-label-col">海选号</view>
+            <view class="form-value-col">
+              <text>{{isAddMode ? newContestantNumber : contestantNumbers[selectedCell.contestant] || '-'}}</text>
+            </view>
+          </view>
+          <!-- 裁判评分项 -->
+          <view class="form-row" wx:for="{{judges}}" wx:key="*this" wx:for-item="judgeItem">
+            <view class="form-label-col">{{judgeItem}}</view>
+            <view class="form-value-col">
+              <input 
+                class="form-input" 
+                type="digit" 
+                value="{{tempScores[judgeItem] || ''}}"
+                bindinput="onScoreInput"
+                data-judge="{{judgeItem}}"
+                placeholder="0-10"
+                placeholder-class="input-placeholder"
+              />
+            </view>
+          </view>
+          <!-- 实时总分 -->
+          <view class="form-row form-row-total">
+            <view class="form-label-col">总分</view>
+            <view class="form-value-col">{{realTimeTotal}}</view>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="modal-footer">
+        <text class="btn btn-outline" bindtap="handleCellModalClose">取消</text>
+        <text class="btn btn-special" bindtap="handleModalSave">保存</text>
+      </view>
+    </view>
+  </view>
+</view>
