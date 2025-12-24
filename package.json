@@ -1,27 +1,20 @@
 {
-  "name": "competition-admin",
+  "name": "score-rank-wx",
   "version": "1.0.0",
-  "description": "Competition Admin System - Browser OCR + AI Auto Scoring",
+  "description": "Competition Admin System - WeChat Mini Program",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "echo 'Use WeChat DevTools to develop'",
+    "build": "echo 'Use WeChat DevTools to build'"
   },
-  "dependencies": {
-    "next": "^14.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "dexie": "^3.2.4",
-    "tesseract.js": "^5.0.4",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "typescript": "^5.0.0"
-  }
+  "dependencies": {},
+  "devDependencies": {},
+  "keywords": [
+    "wechat",
+    "miniprogram",
+    "competition",
+    "scoring"
+  ],
+  "author": "",
+  "license": "MIT"
 }
-

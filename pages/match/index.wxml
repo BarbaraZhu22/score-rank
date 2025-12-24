@@ -1,0 +1,46 @@
+<!--pages/match/index.wxml-->
+<view class="container match-detail-page" wx:if="{{matchData}}">
+  <view class="match-header">
+    <view class="header-actions">
+      <button class="btn btn-non-outline" bindtap="navigateBack">← 返回列表</button>
+      <button 
+        class="btn btn-outline refresh-btn" 
+        bindtap="handleRefresh"
+        disabled="{{isRefreshing}}"
+      >
+        <text wx:if="{{isRefreshing}}" class="loading"></text>
+        {{isRefreshing ? '刷新中...' : '🔄 刷新'}}
+      </button>
+    </view>
+    <view class="card">
+      <text class="match-title">{{matchData.match.name}}</text>
+      <view class="match-meta">
+        <text>更新于：{{matchData.match.updatedAt}}</text>
+        <text>版本：{{currentVersion}}</text>
+        <text wx:if="{{matchData.match.isPublic}}" class="public-badge">公开</text>
+        <text wx:else class="private-badge">私有</text>
+        <text wx:if="{{isAdmin}}" class="admin-badge">管理员</text>
+      </view>
+    </view>
+  </view>
+
+  <table-view 
+    match-id="{{matchId || matchUniqueId}}"
+    judges="{{matchData.judges}}"
+    contestants="{{matchData.contestants}}"
+    scores="{{matchData.scores}}"
+    contestant-numbers="{{matchData.match.contestantNumbers}}"
+    match-name="{{matchData.match.name}}"
+    bind:update="loadMatchData"
+    bind:refresh="handleRefresh"
+  >
+  </table-view>
+
+</view>
+
+<view wx:else class="container">
+  <view class="card">
+    <text>加载中...</text>
+  </view>
+</view>
+

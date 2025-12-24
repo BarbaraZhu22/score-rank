@@ -1,0 +1,58 @@
+<!--components/table-view/index.wxml-->
+<view class="card">
+  <view class="flex-between mb-3">
+    <text class="card-title">评分表</text>
+    <view class="table-header-actions">
+      <slot name="actions"></slot>
+      <button class="btn btn-s" bindtap="toggleOperations">
+        {{showOperations ? '隐藏操作' : '显示操作'}}
+      </button>
+      <button class="btn btn-special" bindtap="handleExportExcel">📊 导出 Excel</button>
+    </view>
+  </view>
+
+  <view class="table-container">
+    <scroll-view scroll-x="true" scroll-y="true" class="table-scroll">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>海选号</th>
+            <th wx:for="{{judges}}" wx:key="*this">{{item}}</th>
+            <th>总分</th>
+            <th wx:if="{{showOperations}}" class="operation-col">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr wx:for="{{contestants}}" wx:key="*this" wx:for-item="contestant" wx:for-index="cIndex">
+            <td>{{contestantNumbers[contestant] || '-'}}</td>
+            <td 
+              wx:for="{{judges}}" 
+              wx:key="*this" 
+              wx:for-item="judge"
+              class="editable {{scoreMap[contestant + '|' + judge] === null || scoreMap[contestant + '|' + judge] === undefined ? 'empty' : ''}}"
+              bindtap="handleCellDoubleClick"
+              data-contestant="{{contestant}}"
+              data-judge="{{judge}}"
+            >
+              <input 
+                wx:if="{{editingCell && editingCell.contestant === contestant && editingCell.judge === judge}}"
+                class="cell-input"
+                type="digit"
+                value="{{editValue}}"
+                bindinput="onEditValueInput"
+                bindblur="handleCellBlur"
+                focus="{{true}}"
+              />
+              <text wx:else>{{scoreMap[contestant + '|' + judge] !== null && scoreMap[contestant + '|' + judge] !== undefined ? (scoreMap[contestant + '|' + judge].toFixed(2)) : '-'}}</text>
+            </td>
+            <td class="total-cell">{{(totalMap[contestant] || 0).toFixed(2)}}</td>
+            <td wx:if="{{showOperations}}" class="operation-col">
+              <text class="delete-btn" bindtap="handleDeleteContestant" data-contestant="{{contestant}}">×</text>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </scroll-view>
+  </view>
+</view>
+

@@ -1,0 +1,182 @@
+<!--pages/index/index.wxml-->
+<view class="container">
+  <view class="header">
+    <text class="title">Genesis Tribe</text>
+    <view class="admin-section">
+      <text wx:if="{{isAdmin}}" class="admin-badge">管理员</text>
+      <view wx:else class="admin-actions">
+        <button class="btn btn-s btn-outline" bindtap="showAdminModal">管理员登录</button>
+        <button class="btn btn-s btn-outline" bindtap="showMasterKeyModal">万能密钥</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="flex-between mb-3">
+      <text class="card-title">🏆比赛列表</text>
+      <button wx:if="{{isAdmin}}" class="btn btn-special" bindtap="showCreateModal">+ 创建比赛</button>
+    </view>
+
+    <view wx:if="{{matches.length === 0}}" class="empty-state">
+      <text>还没有比赛</text>
+      <text wx:if="{{!isAdmin}}" class="empty-hint">公开比赛将显示在这里</text>
+    </view>
+
+    <view wx:else class="list">
+      <view wx:for="{{matches}}" wx:key="id" class="list-item">
+        <view class="match-info">
+          <navigator url="/pages/match/index?id={{item.id}}&_id={{item._id}}" class="match-name">
+            {{item.name}}
+          </navigator>
+          <view class="match-meta">
+            <text>更新于：{{item.updatedAt}}</text>
+            <text wx:if="{{item.isPublic}}" class="public-badge">公开</text>
+            <text wx:else class="private-badge">私有</text>
+          </view>
+        </view>
+        <view class="match-actions">
+          <navigator url="/pages/match/index?id={{item.id}}&_id={{item._id}}" class="btn btn-secondary">
+            查看
+          </navigator>
+          <button 
+            wx:if="{{isAdmin}}"
+            class="btn btn-outline" 
+            bindtap="handleDeleteClick" 
+            data-id="{{item.id}}"
+          >
+            删除
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Admin Login Modal -->
+  <view wx:if="{{showAdminModal}}" class="modal-overlay" bindtap="hideAdminModal">
+    <view class="modal-content" catchtap="stopPropagation">
+      <view class="modal-header">
+        <text class="modal-title">管理员登录</text>
+        <text class="modal-close" bindtap="hideAdminModal">×</text>
+      </view>
+      <view>
+        <view class="form-item">
+          <text class="form-label">输入管理员手机号</text>
+          <input 
+            class="input" 
+            type="number" 
+            value="{{adminPhone}}"
+            bindinput="onAdminPhoneInput"
+            placeholder="请输入管理员手机号"
+            maxlength="11"
+          />
+        </view>
+        <view class="form-actions">
+          <button class="btn btn-outline" bindtap="hideAdminModal">取消</button>
+          <button class="btn btn-special" bindtap="handleVerifyPhone">验证</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Master Key Modal -->
+  <view wx:if="{{showMasterKeyModal}}" class="modal-overlay" bindtap="hideMasterKeyModal">
+    <view class="modal-content" catchtap="stopPropagation">
+      <view class="modal-header">
+        <text class="modal-title">万能密钥</text>
+        <text class="modal-close" bindtap="hideMasterKeyModal">×</text>
+      </view>
+      <view>
+        <view class="form-item">
+          <text class="form-label">输入万能密钥</text>
+          <input 
+            class="input" 
+            type="text" 
+            value="{{masterKey}}"
+            bindinput="onMasterKeyInput"
+            placeholder="请输入万能密钥"
+            password="{{true}}"
+          />
+        </view>
+        <view class="form-actions">
+          <button class="btn btn-outline" bindtap="hideMasterKeyModal">取消</button>
+          <button class="btn btn-special" bindtap="handleVerifyMasterKey">验证</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Create Match Modal -->
+  <view wx:if="{{showCreateModal}}" class="modal-overlay" bindtap="hideCreateModal">
+    <view class="modal-content" catchtap="stopPropagation">
+      <view class="modal-header">
+        <text class="modal-title">创建新比赛</text>
+        <text class="modal-close" bindtap="hideCreateModal">×</text>
+      </view>
+      <view>
+        <view class="form-item">
+          <text class="form-label">比赛名称 *</text>
+          <input 
+            class="input" 
+            type="text" 
+            value="{{newMatchName}}"
+            bindinput="onMatchNameInput"
+            placeholder="例如：年度比赛"
+          />
+        </view>
+        <view class="form-item">
+          <text class="form-label">裁判名称（用逗号或换行分隔）*</text>
+          <textarea 
+            class="input" 
+            value="{{judgeNames}}"
+            bindinput="onJudgeNamesInput"
+            placeholder="例如：Judge A, Judge B, Judge C"
+          />
+        </view>
+        <view class="form-item">
+          <text class="form-label">输入海选人数（可先不填写）</text>
+          <input 
+            class="input" 
+            type="text" 
+            value="{{contestantCount}}"
+            bindinput="onContestantCountInput"
+            placeholder="例如：20（将创建编号1-20的选手）"
+          />
+        </view>
+        <view class="form-actions">
+          <button class="btn btn-outline" bindtap="hideCreateModal">取消</button>
+          <button class="btn btn-special" bindtap="handleCreateMatch">创建</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Delete Confirm Modal -->
+  <view wx:if="{{matchToDelete}}" class="modal-overlay" bindtap="handleCancelDelete">
+    <view class="modal-content" catchtap="stopPropagation">
+      <view class="modal-header">
+        <text class="modal-title">确认删除</text>
+        <text class="modal-close" bindtap="handleCancelDelete">×</text>
+      </view>
+      <view>
+        <view wx:if="{{deleteConfirmCount === 0}}">
+          <text class="delete-text">您确定要删除比赛 "{{matchToDelete.name}}" 吗？</text>
+          <text class="delete-warning">此操作将永久删除该比赛及其所有评分数据，且无法恢复。</text>
+        </view>
+        <view wx:else>
+          <text class="delete-warning-title">⚠️ 最后确认</text>
+          <text class="delete-text">您即将永久删除比赛 "{{matchToDelete.name}}"</text>
+          <text class="delete-warning-red">此操作无法撤销！请再次点击确认删除按钮。</text>
+        </view>
+        <view class="form-actions">
+          <button class="btn btn-outline" bindtap="handleCancelDelete">取消</button>
+          <button 
+            class="btn {{deleteConfirmCount === 0 ? 'btn-outline' : 'btn-danger'}}" 
+            bindtap="handleConfirmDelete"
+          >
+            {{deleteConfirmCount === 0 ? '确认删除' : '最后确认删除'}}
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

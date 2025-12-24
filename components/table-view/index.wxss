@@ -1,0 +1,82 @@
+/* components/table-view/index.wxss */
+.table-header-actions {
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.table-scroll {
+  width: 100%;
+  max-height: 70vh;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: white;
+  border-radius: 16rpx;
+  min-width: 600rpx;
+}
+
+.table th,
+.table td {
+  padding: 24rpx 32rpx;
+  text-align: left;
+  border-bottom: 2rpx solid #e0e0e0;
+  white-space: nowrap;
+}
+
+.table th {
+  background: #374c62 !important;
+  color: white;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 28rpx;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.table td.editable {
+  cursor: pointer;
+  position: relative;
+}
+
+.table td.editable:active {
+  background: #fff3cd;
+}
+
+.table td.empty {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.cell-input {
+  width: 100%;
+  padding: 8rpx;
+  border: 4rpx solid #000;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+}
+
+.total-cell {
+  font-weight: 600;
+}
+
+.operation-col {
+  width: 80rpx;
+  font-size: 30rpx;
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #ff6b6b;
+  line-height: 1;
+}
+

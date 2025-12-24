@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "比赛详情",
+  "usingComponents": {
+    "table-view": "../../components/table-view/index"
+  }
+}
+
