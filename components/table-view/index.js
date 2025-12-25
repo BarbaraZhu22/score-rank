@@ -55,12 +55,16 @@ Component({
 
   // 【修复1：监听tableData变化，自动更新显示列表，并计算排名和格式化数据】
   observers: {
-    "tableData,showRank,contestantNumbers": function (tableData, showRank, contestantNumbers) {
+    "tableData,showRank,contestantNumbers": function (
+      tableData,
+      showRank,
+      contestantNumbers
+    ) {
       if (!Array.isArray(tableData) || tableData.length === 0) {
         this.setData({ currentContestantList: [] });
         return;
       }
-      
+
       // 根据showRank决定显示排序后的列表，并计算排名和格式化数据
       let sortedList;
       if (showRank) {
@@ -76,7 +80,7 @@ Component({
           return numA - numB;
         });
       }
-      
+
       // 为每个item添加排名、格式化数据、唯一key
       const processedList = sortedList.map((item, index) => {
         const processed = { ...item };
@@ -104,13 +108,15 @@ Component({
             score != null && !isNaN(score) ? score.toFixed(2) : "-";
           // 添加cell class
           const isEmpty = score == null || isNaN(score);
-          processed.formattedScores[`${judge}_class`] = `editable ${isEmpty ? "empty" : ""}`;
+          processed.formattedScores[`${judge}_class`] = `editable ${
+            isEmpty ? "empty" : ""
+          }`;
         });
         // 格式化总分
         processed.formattedTotal = (item.total || 0).toFixed(2);
         return processed;
       });
-      
+
       this.setData({ currentContestantList: processedList });
     },
     tempScores: function (tempScores) {
@@ -129,7 +135,6 @@ Component({
   },
 
   methods: {
-
     // 【增量更新：立即更新UI，后台异步同步到数据库】
     async handleModalSave() {
       // 防止重复保存
@@ -179,7 +184,7 @@ Component({
           const newContestantId = `contestant_${Date.now()}_${Math.random()
             .toString(36)
             .substr(2, 8)}`;
-          
+
           // 构建新分数数组
           judges.forEach((judge) => {
             const numValue =
@@ -195,14 +200,16 @@ Component({
               });
             }
           });
-          
+
           incrementalContestants = [newContestantId];
-          incrementalContestantNumbers = { [newContestantId]: newContestantNumber };
+          incrementalContestantNumbers = {
+            [newContestantId]: newContestantNumber,
+          };
         } else {
           // 编辑选手逻辑
           const contestant = selectedCell?.contestant;
           if (!contestant) throw new Error("选手信息异常");
-          
+
           // 构建更新的分数数组（先删除该选手的所有分数，再添加新分数）
           judges.forEach((judge) => {
             const numValue =
@@ -291,8 +298,7 @@ Component({
       const tempScores = {};
       this.properties.judges.forEach((j) => {
         const score = row[j];
-        tempScores[j] =
-          score !== null && !isNaN(score) ? score.toString() : "";
+        tempScores[j] = score !== null && !isNaN(score) ? score.toString() : "";
       });
 
       this.setData({
@@ -398,217 +404,312 @@ Component({
             });
         });
 
-        // 2. 创建 canvas 2D 上下文
-        const ctx = canvasNode.getContext("2d");
+        // 2. 计算参数
         const dpr = wx.getSystemInfoSync().pixelRatio;
         const canvasWidth = 750;
-        const canvasHeight = Math.max(1000, 200 + currentContestantList.length * 50);
-
-        // 设置 canvas 实际尺寸
-        canvasNode.width = canvasWidth * dpr;
-        canvasNode.height = canvasHeight * dpr;
-        ctx.scale(dpr, dpr);
-
-        // 3. 绘制背景
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-        // 4. 绘制标题
-        ctx.fillStyle = "#333333";
-        ctx.font = "bold 32px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const title = matchName || "评分表";
-        ctx.fillText(title, canvasWidth / 2, 40);
-
-        // 5. 计算列宽
         const padding = 20;
         const startY = 80;
         const rowHeight = 50;
         const headerHeight = 50;
+        const titleHeight = 80;
+
+        // 计算每页最大行数（确保canvas高度不超过限制）
+        // 微信小程序canvas最大高度约4096px，考虑dpr后，逻辑高度约1365px（dpr=3）或2048px（dpr=2）
+        // 保守估计：逻辑高度不超过1500px
+        const maxCanvasHeight = 1500;
+        const maxRowsPerPage = Math.floor(
+          (maxCanvasHeight - titleHeight - headerHeight) / rowHeight
+        );
+
+        // 计算需要分几页
+        const totalRows = currentContestantList.length;
+        const totalPages = Math.ceil(totalRows / maxRowsPerPage);
 
         // 计算各列宽度
         const rankColWidth = showRank ? 60 : 0;
         const firstColWidth = 80;
         const totalColWidth = 80;
-        const availableWidth = canvasWidth - padding * 2 - rankColWidth - firstColWidth - totalColWidth;
-        const judgeColWidth = judges.length > 0 ? availableWidth / judges.length : 0;
+        const availableWidth =
+          canvasWidth -
+          padding * 2 -
+          rankColWidth -
+          firstColWidth -
+          totalColWidth;
+        const judgeColWidth =
+          judges.length > 0 ? availableWidth / judges.length : 0;
 
-        let currentX = padding;
+        // 3. 绘制单页的函数
+        const drawPage = async (pageData, pageIndex, totalPages) => {
+          const rowsInPage = pageData.length;
+          const canvasHeight =
+            titleHeight + headerHeight + rowsInPage * rowHeight;
 
-        // 6. 绘制表头
-        ctx.fillStyle = "#374c62";
-        ctx.fillRect(padding, startY, canvasWidth - padding * 2, headerHeight);
+          // 设置 canvas 实际尺寸
+          canvasNode.width = canvasWidth * dpr;
+          canvasNode.height = canvasHeight * dpr;
+          const ctx = canvasNode.getContext("2d");
+          ctx.scale(dpr, dpr);
 
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 24px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
+          // 绘制背景
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-        if (showRank) {
-          ctx.fillText("排名", currentX + rankColWidth / 2, startY + headerHeight / 2);
-          currentX += rankColWidth;
-        }
-
-        ctx.fillText("海选号", currentX + firstColWidth / 2, startY + headerHeight / 2);
-        currentX += firstColWidth;
-
-        judges.forEach((judge) => {
-          ctx.fillText(judge, currentX + judgeColWidth / 2, startY + headerHeight / 2);
-          currentX += judgeColWidth;
-        });
-
-        ctx.fillText("总分", currentX + totalColWidth / 2, startY + headerHeight / 2);
-
-        // 7. 绘制表格内容
-        ctx.font = "24px sans-serif";
-        ctx.fillStyle = "#333333";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-
-        currentContestantList.forEach((item, index) => {
-          const rowY = startY + headerHeight + index * rowHeight;
-          currentX = padding;
-
-          // 确保每行开始时重置样式
+          // 绘制标题
           ctx.fillStyle = "#333333";
-          ctx.font = "24px sans-serif";
+          ctx.font = "bold 32px sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-
-          // 行背景色（偶数行）
-          if (index % 2 === 1) {
-            ctx.fillStyle = "#fff9e6";
-            ctx.fillRect(padding, rowY, canvasWidth - padding * 2, rowHeight);
-            ctx.fillStyle = "#333333"; // 恢复文字颜色
+          let title = matchName || "评分表";
+          if (totalPages > 1) {
+            title += ` (${pageIndex + 1}/${totalPages})`;
           }
+          ctx.fillText(title, canvasWidth / 2, 40);
 
-          // 排名列（绘制紫色圆圈和排名数字）
+          let currentX = padding;
+
+          // 绘制表头
+          ctx.fillStyle = "#374c62";
+          ctx.fillRect(
+            padding,
+            startY,
+            canvasWidth - padding * 2,
+            headerHeight
+          );
+
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 24px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          currentX = padding;
+
           if (showRank) {
-            const rankCenterX = currentX + rankColWidth / 2;
-            const rankCenterY = rowY + rowHeight / 2;
-            const circleRadius = 22; // 圆圈半径
-            
-            // 绘制紫色圆圈背景
-            ctx.fillStyle = "#e6e6ff";
-            ctx.beginPath();
-            ctx.arc(rankCenterX, rankCenterY, circleRadius, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // 绘制排名数字（紫色文字）
-            ctx.fillStyle = "#6666cc";
-            ctx.font = "bold 24px sans-serif";
-            const rankText = item.rank ? String(item.rank) : "";
-            ctx.fillText(rankText, rankCenterX, rankCenterY);
-            
-            // 恢复字体和颜色
-            ctx.font = "24px sans-serif";
-            ctx.fillStyle = "#333333";
+            ctx.fillText(
+              "排名",
+              currentX + rankColWidth / 2,
+              startY + headerHeight / 2
+            );
             currentX += rankColWidth;
           }
 
-          // 海选号
-          const contestantNumber = (contestantNumbers && contestantNumbers[item.contestant]) || "-";
           ctx.fillText(
-            String(contestantNumber),
+            "海选号",
             currentX + firstColWidth / 2,
-            rowY + rowHeight / 2
+            startY + headerHeight / 2
           );
           currentX += firstColWidth;
 
-          // 裁判分数
-          if (judges && Array.isArray(judges) && judges.length > 0) {
-            judges.forEach((judge) => {
-              // 确保 formattedScores 存在，如果不存在则从 item 中获取原始分数
-              let score = "-";
-              if (item.formattedScores && item.formattedScores[judge] !== undefined) {
-                score = item.formattedScores[judge];
-              } else if (item[judge] !== undefined && item[judge] !== null) {
-                score = typeof item[judge] === 'number' ? item[judge].toFixed(2) : String(item[judge]);
-              }
-              ctx.fillText(String(score), currentX + judgeColWidth / 2, rowY + rowHeight / 2);
-              currentX += judgeColWidth;
-            });
+          judges.forEach((judge) => {
+            ctx.fillText(
+              judge,
+              currentX + judgeColWidth / 2,
+              startY + headerHeight / 2
+            );
+            currentX += judgeColWidth;
+          });
+
+          ctx.fillText(
+            "总分",
+            currentX + totalColWidth / 2,
+            startY + headerHeight / 2
+          );
+
+          // 绘制表格内容
+          ctx.font = "24px sans-serif";
+          ctx.fillStyle = "#333333";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          pageData.forEach((item, index) => {
+            const rowY = startY + headerHeight + index * rowHeight;
+            currentX = padding;
+
+            // 确保每行开始时重置样式
+            ctx.fillStyle = "#333333";
+            ctx.font = "24px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            // 行背景色（偶数行）
+            if (index % 2 === 1) {
+              ctx.fillStyle = "#fff9e6";
+              ctx.fillRect(padding, rowY, canvasWidth - padding * 2, rowHeight);
+              ctx.fillStyle = "#333333"; // 恢复文字颜色
+            }
+
+            // 排名列（绘制紫色圆圈和排名数字）
+            if (showRank) {
+              const rankCenterX = currentX + rankColWidth / 2;
+              const rankCenterY = rowY + rowHeight / 2;
+              const circleRadius = 22; // 圆圈半径
+
+              // 绘制紫色圆圈背景
+              ctx.fillStyle = "#e6e6ff";
+              ctx.beginPath();
+              ctx.arc(rankCenterX, rankCenterY, circleRadius, 0, Math.PI * 2);
+              ctx.fill();
+
+              // 绘制排名数字（紫色文字）
+              ctx.fillStyle = "#6666cc";
+              ctx.font = "bold 24px sans-serif";
+              const rankText = item.rank ? String(item.rank) : "";
+              ctx.fillText(rankText, rankCenterX, rankCenterY);
+
+              // 恢复字体和颜色
+              ctx.font = "24px sans-serif";
+              ctx.fillStyle = "#333333";
+              currentX += rankColWidth;
+            }
+
+            // 海选号
+            const contestantNumber =
+              (contestantNumbers && contestantNumbers[item.contestant]) || "-";
+            ctx.fillText(
+              String(contestantNumber),
+              currentX + firstColWidth / 2,
+              rowY + rowHeight / 2
+            );
+            currentX += firstColWidth;
+
+            // 裁判分数
+            if (judges && Array.isArray(judges) && judges.length > 0) {
+              judges.forEach((judge) => {
+                // 确保 formattedScores 存在，如果不存在则从 item 中获取原始分数
+                let score = "-";
+                if (
+                  item.formattedScores &&
+                  item.formattedScores[judge] !== undefined
+                ) {
+                  score = item.formattedScores[judge];
+                } else if (item[judge] !== undefined && item[judge] !== null) {
+                  score =
+                    typeof item[judge] === "number"
+                      ? item[judge].toFixed(2)
+                      : String(item[judge]);
+                }
+                ctx.fillText(
+                  String(score),
+                  currentX + judgeColWidth / 2,
+                  rowY + rowHeight / 2
+                );
+                currentX += judgeColWidth;
+              });
+            }
+
+            // 总分
+            const totalText = item.formattedTotal || "0.00";
+            ctx.fillText(
+              String(totalText),
+              currentX + totalColWidth / 2,
+              rowY + rowHeight / 2
+            );
+          });
+
+          // 绘制边框
+          ctx.strokeStyle = "#e0e0e0";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(
+            padding,
+            startY,
+            canvasWidth - padding * 2,
+            headerHeight + rowsInPage * rowHeight
+          );
+
+          // 绘制行分隔线
+          for (let i = 0; i <= rowsInPage; i++) {
+            const y = startY + headerHeight + i * rowHeight;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(canvasWidth - padding, y);
+            ctx.stroke();
           }
 
-          // 总分
-          const totalText = item.formattedTotal || "0.00";
-          ctx.fillText(
-            String(totalText),
-            currentX + totalColWidth / 2,
-            rowY + rowHeight / 2
-          );
-        });
+          // 导出当前页图片
+          return new Promise((resolve, reject) => {
+            wx.canvasToTempFilePath({
+              canvas: canvasNode,
+              width: canvasWidth,
+              height: canvasHeight,
+              destWidth: canvasWidth * dpr,
+              destHeight: canvasHeight * dpr,
+              success: (res) => {
+                resolve(res.tempFilePath);
+              },
+              fail: (err) => {
+                console.error("canvasToTempFilePath 失败:", err);
+                reject(err);
+              },
+            });
+          });
+        };
 
-        // 8. 绘制边框
-        ctx.strokeStyle = "#e0e0e0";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(padding, startY, canvasWidth - padding * 2, headerHeight + currentContestantList.length * rowHeight);
+        // 4. 分页处理并导出
+        const imagePaths = [];
+        for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+          const startIndex = pageIndex * maxRowsPerPage;
+          const endIndex = Math.min(startIndex + maxRowsPerPage, totalRows);
+          const pageData = currentContestantList.slice(startIndex, endIndex);
 
-        // 绘制行分隔线
-        for (let i = 0; i <= currentContestantList.length; i++) {
-          const y = startY + headerHeight + i * rowHeight;
-          ctx.beginPath();
-          ctx.moveTo(padding, y);
-          ctx.lineTo(canvasWidth - padding, y);
-          ctx.stroke();
+          const imagePath = await drawPage(pageData, pageIndex, totalPages);
+          imagePaths.push(imagePath);
+
+          // 每页之间稍作延迟，避免canvas操作过快
+          if (pageIndex < totalPages - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
         }
 
-        // 9. 导出图片
-        await new Promise((resolve, reject) => {
-          wx.canvasToTempFilePath({
-            canvas: canvasNode,
-            width: canvasWidth,
-            height: canvasHeight,
-            destWidth: canvasWidth * dpr,
-            destHeight: canvasHeight * dpr,
-            success: async (res) => {
-              try {
-                // 10. 保存到相册
-                await new Promise((resolveSave, rejectSave) => {
-                  wx.saveImageToPhotosAlbum({
-                    filePath: res.tempFilePath,
-                    success: () => {
-                      resolveSave();
-                    },
-                    fail: (err) => {
-                      if (err.errMsg.includes("auth deny") || err.errMsg.includes("authorize")) {
-                        // 用户拒绝授权，引导用户开启
-                        wx.showModal({
-                          title: "需要授权",
-                          content: "需要您授权保存图片到相册",
-                          confirmText: "去设置",
-                          success: (modalRes) => {
-                            if (modalRes.confirm) {
-                              wx.openSetting({
-                                success: (settingRes) => {
-                                  if (settingRes.authSetting["scope.writePhotosAlbum"]) {
-                                    wx.showToast({ title: "请重新点击导出", icon: "none" });
-                                  }
-                                },
+        // 5. 保存所有图片到相册
+        for (let i = 0; i < imagePaths.length; i++) {
+          await new Promise((resolve, reject) => {
+            wx.saveImageToPhotosAlbum({
+              filePath: imagePaths[i],
+              success: () => {
+                resolve();
+              },
+              fail: (err) => {
+                if (
+                  err.errMsg.includes("auth deny") ||
+                  err.errMsg.includes("authorize")
+                ) {
+                  // 用户拒绝授权，引导用户开启
+                  wx.showModal({
+                    title: "需要授权",
+                    content: "需要您授权保存图片到相册",
+                    confirmText: "去设置",
+                    success: (modalRes) => {
+                      if (modalRes.confirm) {
+                        wx.openSetting({
+                          success: (settingRes) => {
+                            if (
+                              settingRes.authSetting["scope.writePhotosAlbum"]
+                            ) {
+                              wx.showToast({
+                                title: "请重新点击导出",
+                                icon: "none",
                               });
                             }
                           },
                         });
                       }
-                      rejectSave(err);
                     },
                   });
-                });
-                resolve();
-              } catch (error) {
-                reject(error);
-              }
-            },
-            fail: (err) => {
-              console.error("canvasToTempFilePath 失败:", err);
-              reject(err);
-            },
+                }
+                reject(err);
+              },
+            });
           });
-        });
+        }
 
         wx.hideLoading();
-        wx.showToast({ title: "图片已保存到相册", icon: "success" });
+        if (totalPages > 1) {
+          wx.showToast({
+            title: `已保存${totalPages}张图片到相册`,
+            icon: "success",
+            duration: 2000,
+          });
+        } else {
+          wx.showToast({ title: "图片已保存到相册", icon: "success" });
+        }
       } catch (error) {
         console.error("导出图片失败:", error);
         wx.hideLoading();
@@ -658,14 +759,20 @@ Component({
                   contestants: this.properties.contestants || [],
                   contestantNumbers: this.properties.contestantNumbers || {},
                 };
-                const mergeResult = await db.matches.mergeMatchData(matchId, currentData, match);
+                const mergeResult = await db.matches.mergeMatchData(
+                  matchId,
+                  currentData,
+                  match
+                );
                 if (mergeResult.success) {
                   match = mergeResult.match;
                 }
               }
 
               // 3. 执行删除操作
-              const updatedContestants = (match.contestants || []).filter((c) => c !== contestant);
+              const updatedContestants = (match.contestants || []).filter(
+                (c) => c !== contestant
+              );
               const updatedScores = (match.scores || []).filter(
                 (s) => s.contestant !== contestant
               );
@@ -683,14 +790,21 @@ Component({
               );
 
               // 4. 如果还有版本冲突，再次合并
-              if (!updateResult.success && updateResult.error === "VERSION_CONFLICT") {
+              if (
+                !updateResult.success &&
+                updateResult.error === "VERSION_CONFLICT"
+              ) {
                 const latestMatch = await db.matches.get(matchId);
                 const currentData = {
                   scores: updatedScores,
                   contestants: updatedContestants,
                   contestantNumbers: updatedNumbers,
                 };
-                const mergeResult = await db.matches.mergeMatchData(matchId, currentData, latestMatch);
+                const mergeResult = await db.matches.mergeMatchData(
+                  matchId,
+                  currentData,
+                  latestMatch
+                );
                 if (mergeResult.success) {
                   match = mergeResult.match;
                 } else {
