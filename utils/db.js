@@ -18,7 +18,6 @@ function initCloud() {
 
   try {
     dbInstance = wx.cloud.database();
-    console.log("云开发数据库初始化成功");
   } catch (e) {
     console.error("云开发数据库初始化失败:", e);
   }
@@ -567,7 +566,6 @@ function getUserId() {
 
 // 日期格式化工具：将时间戳（number）转为标准日期格式（如 yyyy-MM-dd HH:mm:ss）
 function formatTime(timestamp) {
-  console.log(timestamp)
   // 校验参数：如果不是有效数字，返回空字符串或默认提示
   if (typeof timestamp !== "number" || isNaN(timestamp) || timestamp <= 0) {
     return "未知时间";

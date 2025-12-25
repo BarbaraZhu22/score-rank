@@ -281,32 +281,121 @@ page {
   font-size: 24rpx;
 }
 
+/* 第1名：正红色渐变（醒目突出） */
 .table-row.rank-1 {
   background: linear-gradient(
     90deg,
-    rgba(255, 215, 0, 0.3) 0%,
-    rgba(255, 255, 255, 1) 10%
+    rgba(255, 59, 48, 0.25) 0%,
+    /* 浅正红 */ rgba(255, 59, 48, 0.1) 8%,
+    rgba(255, 255, 255, 1) 15%
   );
+  /* 可选：添加轻微阴影增强质感 */
+  box-shadow: inset 0 0 4px rgba(255, 59, 48, 0.15);
 }
 
+/* 第2名：橙红色渐变 */
 .table-row.rank-2 {
   background: linear-gradient(
     90deg,
-    rgba(192, 192, 192, 0.3) 0%,
-    rgba(255, 255, 255, 1) 10%
+    rgba(255, 149, 0, 0.25) 0%,
+    /* 亮橙 */ rgba(255, 149, 0, 0.1) 8%,
+    rgba(255, 255, 255, 1) 15%
   );
+  box-shadow: inset 0 0 4px rgba(255, 149, 0, 0.15);
 }
 
+/* 第3名：金黄色渐变（原金色优化） */
 .table-row.rank-3 {
   background: linear-gradient(
     90deg,
-    rgba(205, 127, 50, 0.3) 0%,
-    rgba(255, 255, 255, 1) 10%
+    rgba(255, 204, 0, 0.25) 0%,
+    /* 金黄 */ rgba(255, 204, 0, 0.1) 8%,
+    rgba(255, 255, 255, 1) 15%
   );
+  box-shadow: inset 0 0 4px rgba(255, 204, 0, 0.15);
+}
+
+/* 第4名：橘黄色渐变 */
+.table-row.rank-4 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 179, 64, 0.2) 0%,
+    /* 橘黄 */ rgba(255, 179, 64, 0.08) 8%,
+    rgba(255, 255, 255, 1) 15%
+  );
+  box-shadow: inset 0 0 4px rgba(255, 179, 64, 0.12);
+}
+
+/* 第5名：暖黄色渐变 */
+.table-row.rank-5 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 214, 10, 0.2) 0%,
+    /* 暖黄 */ rgba(255, 214, 10, 0.08) 8%,
+    rgba(255, 255, 255, 1) 15%
+  );
+  box-shadow: inset 0 0 4px rgba(255, 214, 10, 0.12);
+}
+
+/* 第6名：浅橘黄渐变 */
+.table-row.rank-6 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 196, 87, 0.18) 0%,
+    rgba(255, 196, 87, 0.07) 8%,
+    rgba(255, 255, 255, 1) 15%
+  );
+  box-shadow: inset 0 0 4px rgba(255, 196, 87, 0.1);
+}
+
+/* 第7名：浅黄渐变 */
+.table-row.rank-7 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 224, 130, 0.18) 0%,
+    rgba(255, 224, 130, 0.07) 8%,
+    rgba(255, 255, 255, 1) 15%
+  );
+  box-shadow: inset 0 0 4px rgba(255, 224, 130, 0.1);
+}
+
+/* 第8名：淡金黄渐变 */
+.table-row.rank-8 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 230, 156, 0.15) 0%,
+    rgba(255, 230, 156, 0.06) 8%,
+    rgba(255, 255, 255, 1) 15%
+  );
+  box-shadow: inset 0 0 4px rgba(255, 230, 156, 0.09);
+}
+
+/* 第9名：极浅黄渐变 */
+.table-row.rank-9 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 236, 179, 0.15) 0%,
+    rgba(255, 236, 179, 0.06) 8%,
+    rgba(255, 255, 255, 1) 15%
+  );
+  box-shadow: inset 0 0 4px rgba(255, 236, 179, 0.09);
+}
+
+/* 第10名：最浅黄渐变 */
+.table-row.rank-10 {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 242, 204, 0.12) 0%,
+    rgba(255, 242, 204, 0.05) 8%,
+    rgba(255, 255, 255, 1) 15%
+  );
+  box-shadow: inset 0 0 4px rgba(255, 242, 204, 0.08);
 }
 
 .table-row.rank-top10 {
-  background: rgba(240, 248, 255, 0.5);
+  /* 可添加统一样式，如文字略微加粗 */
+  font-weight: 500;
+  /* 继承上述对应排名的渐变样式，无需重复定义 */
 }
 
 /* 弹窗输入框样式 */
@@ -443,4 +532,13 @@ page {
   border-top: 1rpx solid #e0e0e0;
   flex-shrink: 0;
   background-color: #ffffff;
+}
+
+/* 隐藏的导出 canvas */
+.export-canvas {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  visibility: hidden;
+  pointer-event: none;
 }

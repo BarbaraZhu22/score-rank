@@ -12,7 +12,6 @@ App({
       
       // 初始化数据库
       initCloud();
-      console.log('比赛管理系统启动 - 云开发已初始化');
     } else {
       console.error('云开发未启用，请在微信开发者工具中开通云开发');
     }

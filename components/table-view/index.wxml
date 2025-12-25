@@ -5,7 +5,7 @@
     <view class="table-header-actions">
       <slot name="actions"></slot>
       <text class="btn btn-outline" bindtap="toggleRank">{{showRank ? '隐藏排名' : '显示排名'}}</text>
-      <text class="btn btn-special" bindtap="handleExportExcel">📊 导出 Excel</text>
+      <text class="btn btn-special" bindtap="handleExportImage">📷 导出图片</text>
     </view>
   </view>
 
@@ -115,4 +115,11 @@
       </view>
     </view>
   </view>
+
+  <!-- 隐藏的 canvas 用于导出图片 -->
+  <canvas 
+    type="2d" 
+    id="exportCanvas" 
+    class="export-canvas"
+  ></canvas>
 </view>

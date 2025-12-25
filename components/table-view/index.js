@@ -48,6 +48,8 @@ Component({
     tempScores: {},
     realTimeTotal: "0.00",
     newContestantNumber: "",
+    canvasWidth: 750,
+    canvasHeight: 1000,
   },
 
   // 【修复1：监听tableData变化，自动更新显示列表，并计算排名和格式化数据】
@@ -114,7 +116,7 @@ Component({
       this.calculateRealTimeTotal(tempScores);
     },
     matchId: function (matchId) {
-      if (matchId) console.log("Table view matchId updated:", matchId);
+      if (matchId) console.info("Table view matchId updated:", matchId);
     },
   },
 
@@ -167,7 +169,6 @@ Component({
 
         // 2. 如果数据库版本号高于当前版本，自动合并
         if (dbVersion > currentVersion) {
-          console.log("检测到版本冲突，自动合并数据...");
           const currentData = {
             scores: currentScores || [],
             contestants: contestants || [],
@@ -448,8 +449,249 @@ Component({
       // observer会自动处理排序
     },
 
-    handleExportExcel() {
-      wx.showToast({ title: "导出功能开发中", icon: "none" });
+    async handleExportImage() {
+      const { currentContestantList, showRank } = this.data;
+      const { judges, contestantNumbers, matchName } = this.properties;
+
+      if (!currentContestantList || currentContestantList.length === 0) {
+        wx.showToast({ title: "暂无数据可导出", icon: "none" });
+        return;
+      }
+
+      wx.showLoading({ title: "正在生成图片..." });
+
+      try {
+        // 1. 获取 canvas 节点
+        const query = wx.createSelectorQuery().in(this);
+        const canvasNode = await new Promise((resolve, reject) => {
+          query
+            .select("#exportCanvas")
+            .fields({ node: true, size: true })
+            .exec((res) => {
+              if (res && res[0] && res[0].node) {
+                resolve(res[0].node);
+              } else {
+                reject(new Error("Canvas 节点获取失败"));
+              }
+            });
+        });
+
+        // 2. 创建 canvas 2D 上下文
+        const ctx = canvasNode.getContext("2d");
+        const dpr = wx.getSystemInfoSync().pixelRatio;
+        const canvasWidth = 750;
+        const canvasHeight = Math.max(1000, 200 + currentContestantList.length * 50);
+
+        // 设置 canvas 实际尺寸
+        canvasNode.width = canvasWidth * dpr;
+        canvasNode.height = canvasHeight * dpr;
+        ctx.scale(dpr, dpr);
+
+        // 3. 绘制背景
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+        // 4. 绘制标题
+        ctx.fillStyle = "#333333";
+        ctx.font = "bold 32px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const title = matchName || "评分表";
+        ctx.fillText(title, canvasWidth / 2, 40);
+
+        // 5. 计算列宽
+        const padding = 20;
+        const startY = 80;
+        const rowHeight = 50;
+        const headerHeight = 50;
+
+        // 计算各列宽度
+        const rankColWidth = showRank ? 60 : 0;
+        const firstColWidth = 80;
+        const totalColWidth = 80;
+        const availableWidth = canvasWidth - padding * 2 - rankColWidth - firstColWidth - totalColWidth;
+        const judgeColWidth = judges.length > 0 ? availableWidth / judges.length : 0;
+
+        let currentX = padding;
+
+        // 6. 绘制表头
+        ctx.fillStyle = "#374c62";
+        ctx.fillRect(padding, startY, canvasWidth - padding * 2, headerHeight);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 24px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        if (showRank) {
+          ctx.fillText("排名", currentX + rankColWidth / 2, startY + headerHeight / 2);
+          currentX += rankColWidth;
+        }
+
+        ctx.fillText("海选号", currentX + firstColWidth / 2, startY + headerHeight / 2);
+        currentX += firstColWidth;
+
+        judges.forEach((judge) => {
+          ctx.fillText(judge, currentX + judgeColWidth / 2, startY + headerHeight / 2);
+          currentX += judgeColWidth;
+        });
+
+        ctx.fillText("总分", currentX + totalColWidth / 2, startY + headerHeight / 2);
+
+        // 7. 绘制表格内容
+        ctx.font = "24px sans-serif";
+        ctx.fillStyle = "#333333";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        currentContestantList.forEach((item, index) => {
+          const rowY = startY + headerHeight + index * rowHeight;
+          currentX = padding;
+
+          // 确保每行开始时重置样式
+          ctx.fillStyle = "#333333";
+          ctx.font = "24px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          // 行背景色（偶数行）
+          if (index % 2 === 1) {
+            ctx.fillStyle = "#fff9e6";
+            ctx.fillRect(padding, rowY, canvasWidth - padding * 2, rowHeight);
+            ctx.fillStyle = "#333333"; // 恢复文字颜色
+          }
+
+          // 排名列（绘制紫色圆圈和排名数字）
+          if (showRank) {
+            const rankCenterX = currentX + rankColWidth / 2;
+            const rankCenterY = rowY + rowHeight / 2;
+            const circleRadius = 22; // 圆圈半径
+            
+            // 绘制紫色圆圈背景
+            ctx.fillStyle = "#e6e6ff";
+            ctx.beginPath();
+            ctx.arc(rankCenterX, rankCenterY, circleRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 绘制排名数字（紫色文字）
+            ctx.fillStyle = "#6666cc";
+            ctx.font = "bold 24px sans-serif";
+            const rankText = item.rank ? String(item.rank) : "";
+            ctx.fillText(rankText, rankCenterX, rankCenterY);
+            
+            // 恢复字体和颜色
+            ctx.font = "24px sans-serif";
+            ctx.fillStyle = "#333333";
+            currentX += rankColWidth;
+          }
+
+          // 海选号
+          const contestantNumber = (contestantNumbers && contestantNumbers[item.contestant]) || "-";
+          ctx.fillText(
+            String(contestantNumber),
+            currentX + firstColWidth / 2,
+            rowY + rowHeight / 2
+          );
+          currentX += firstColWidth;
+
+          // 裁判分数
+          if (judges && Array.isArray(judges) && judges.length > 0) {
+            judges.forEach((judge) => {
+              // 确保 formattedScores 存在，如果不存在则从 item 中获取原始分数
+              let score = "-";
+              if (item.formattedScores && item.formattedScores[judge] !== undefined) {
+                score = item.formattedScores[judge];
+              } else if (item[judge] !== undefined && item[judge] !== null) {
+                score = typeof item[judge] === 'number' ? item[judge].toFixed(2) : String(item[judge]);
+              }
+              ctx.fillText(String(score), currentX + judgeColWidth / 2, rowY + rowHeight / 2);
+              currentX += judgeColWidth;
+            });
+          }
+
+          // 总分
+          const totalText = item.formattedTotal || "0.00";
+          ctx.fillText(
+            String(totalText),
+            currentX + totalColWidth / 2,
+            rowY + rowHeight / 2
+          );
+        });
+
+        // 8. 绘制边框
+        ctx.strokeStyle = "#e0e0e0";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(padding, startY, canvasWidth - padding * 2, headerHeight + currentContestantList.length * rowHeight);
+
+        // 绘制行分隔线
+        for (let i = 0; i <= currentContestantList.length; i++) {
+          const y = startY + headerHeight + i * rowHeight;
+          ctx.beginPath();
+          ctx.moveTo(padding, y);
+          ctx.lineTo(canvasWidth - padding, y);
+          ctx.stroke();
+        }
+
+        // 9. 导出图片
+        await new Promise((resolve, reject) => {
+          wx.canvasToTempFilePath({
+            canvas: canvasNode,
+            width: canvasWidth,
+            height: canvasHeight,
+            destWidth: canvasWidth * dpr,
+            destHeight: canvasHeight * dpr,
+            success: async (res) => {
+              try {
+                // 10. 保存到相册
+                await new Promise((resolveSave, rejectSave) => {
+                  wx.saveImageToPhotosAlbum({
+                    filePath: res.tempFilePath,
+                    success: () => {
+                      resolveSave();
+                    },
+                    fail: (err) => {
+                      if (err.errMsg.includes("auth deny") || err.errMsg.includes("authorize")) {
+                        // 用户拒绝授权，引导用户开启
+                        wx.showModal({
+                          title: "需要授权",
+                          content: "需要您授权保存图片到相册",
+                          confirmText: "去设置",
+                          success: (modalRes) => {
+                            if (modalRes.confirm) {
+                              wx.openSetting({
+                                success: (settingRes) => {
+                                  if (settingRes.authSetting["scope.writePhotosAlbum"]) {
+                                    wx.showToast({ title: "请重新点击导出", icon: "none" });
+                                  }
+                                },
+                              });
+                            }
+                          },
+                        });
+                      }
+                      rejectSave(err);
+                    },
+                  });
+                });
+                resolve();
+              } catch (error) {
+                reject(error);
+              }
+            },
+            fail: (err) => {
+              console.error("canvasToTempFilePath 失败:", err);
+              reject(err);
+            },
+          });
+        });
+
+        wx.hideLoading();
+        wx.showToast({ title: "图片已保存到相册", icon: "success" });
+      } catch (error) {
+        console.error("导出图片失败:", error);
+        wx.hideLoading();
+        wx.showToast({ title: "导出失败，请重试", icon: "none" });
+      }
     },
 
     async handleDeleteContestant(e) {
@@ -489,7 +731,6 @@ Component({
 
               // 2. 如果数据库版本号高于当前版本，自动合并
               if (dbVersion > localVersion) {
-                console.log("检测到版本冲突，自动合并数据...");
                 const currentData = {
                   scores: this.properties.scores || [],
                   contestants: this.properties.contestants || [],
