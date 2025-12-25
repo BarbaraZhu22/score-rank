@@ -26,32 +26,32 @@
           <view class="table-body">
             <!-- 响应式列表：根据排名显示状态，渲染对应的预计算列表 -->
             <view 
-              class="table-row {{getRankClass(contestant)}} {{index % 2 === 1 ? 'even-row' : ''}}" 
+              class="table-row {{item.rankClass}} {{index % 2 === 1 ? 'even-row' : ''}}" 
               wx:for="{{currentContestantList}}" 
-              wx:key="*this" 
-              wx:for-item="contestant" 
+              wx:key="_key" 
+              wx:for-item="item" 
               wx:for-index="index"
             >
               <view wx:if="{{showRank}}" class="table-cell table-cell-rank">
                 <view class="rank-circle">
-                  <text class="rank-text">{{getRank(contestant)}}</text>
+                  <text class="rank-text">{{item.rank}}</text>
                 </view>
               </view>
-              <view class="table-cell table-cell-first">{{contestantNumbers[contestant] || '-'}}</view>
+              <view class="table-cell table-cell-first">{{contestantNumbers[item.contestant] || '-'}}</view>
               <view 
-                class="table-cell table-cell-judge {{getCellClass(contestant, judge)}}"
+                class="table-cell table-cell-judge {{item.formattedScores[judge + '_class']}}"
                 wx:for="{{judges}}" 
                 wx:key="*this" 
                 wx:for-item="judge"
                 bindtap="handleCellDoubleClick"
-                data-contestant="{{contestant}}"
+                data-contestant="{{item.contestant}}"
                 data-judge="{{judge}}"
               >
-                <text>{{getScoreText(contestant, judge)}}</text>
+                <text>{{item.formattedScores[judge]}}</text>
               </view>
-              <view class="table-cell table-cell-total">{{getTotalText(contestant)}}</view>
+              <view class="table-cell table-cell-total">{{item.formattedTotal}}</view>
               <view wx:if="{{showOperations}}" class="table-cell table-cell-operation">
-                <text class="delete-btn" bindtap="handleDeleteContestant" data-contestant="{{contestant}}">×</text>
+                <text class="delete-btn" bindtap="handleDeleteContestant" data-contestant="{{item.contestant}}">×</text>
               </view>
             </view>
             <!-- 空数据提示 -->

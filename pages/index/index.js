@@ -1,5 +1,5 @@
 // pages/index/index.js
-const { db, createMatch, getUserId } = require("../../utils/db");
+const { db, createMatch, getUserId, formatTime } = require("../../utils/db");
 
 Page({
   data: {
@@ -61,7 +61,13 @@ Page({
         ? await db.matches.getAllMatches()
         : await db.matches.getPublicMatches();
 
-      this.setData({ matches });
+      // Format updatedAt for each match
+      const formattedMatches = matches.map(match => ({
+        ...match,
+        updatedAt: formatTime(match.updatedAt)
+      }));
+
+      this.setData({ matches: formattedMatches });
     } catch (e) {
       console.error("Failed to load matches:", e);
       wx.showToast({
@@ -278,14 +284,14 @@ Page({
     });
 
     try {
-      // Default to public for new matches
+      // Default to private for new matches
       const matchId = await createMatch(
         newMatchName,
         judgeList,
         contestantList,
         contestantNumbersMap,
         userId,
-        true
+        false
       );
       this.hideCreateModal();
       wx.navigateTo({

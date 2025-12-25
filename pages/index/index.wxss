@@ -85,7 +85,7 @@
 }
 
 .match-meta {
-  font-size: 28rpx;
+  font-size: 24rpx;
   color: #666;
   margin-top: 8rpx;
   display: flex;

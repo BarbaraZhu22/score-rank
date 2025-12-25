@@ -3,19 +3,23 @@
   margin-bottom: 24rpx;
 }
 
+.match-header .card {
+  margin: 0 20rpx;
+  padding: 15px 20rpx 10rpx;
+}
+
 .header-actions {
   display: flex;
-  justify-content: space-between;
+  gap: 12rpx;
   align-items: center;
-  height: fit-content;
-  margin-bottom: 12rpx;
+  flex-wrap: wrap;
 }
 
 .refresh-btn {
   display: flex;
   align-items: center;
   gap: 8rpx;
-  font-size: 28rpx;
+  font-size: 22rpx;
   min-height: 52rpx;
 }
 
@@ -29,7 +33,7 @@
 .match-meta {
   margin-top: 12rpx;
   color: #666;
-  font-size: 28rpx;
+  font-size: 22rpx;
   display: flex;
   align-items: center;
   gap: 12rpx;

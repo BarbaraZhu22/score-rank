@@ -112,13 +112,13 @@ const db = {
           };
         }
 
-        // 更新数据
+        // 更新数据（确保版本号总是更新）
         const newVersion = (current.version || 1) + 1;
         const now = Date.now();
 
         const updateData = {
           ...updates,
-          version: newVersion,
+          version: newVersion, // 每次更新都增加版本号
           updatedAt: now,
         };
 
@@ -220,6 +220,61 @@ const db = {
       }
 
       return Array.from(scoreMap.values());
+    },
+
+    // 合并match数据：处理版本冲突时自动合并
+    async mergeMatchData(matchId, currentData, dbMatch) {
+      if (!dbInstance) {
+        throw new Error("云开发数据库未初始化");
+      }
+
+      // 1. 合并scores：对比每条同judge同contestant的score，取updatedAt最新的
+      const currentScores = currentData?.scores || [];
+      const dbScores = dbMatch.scores || [];
+      const mergedScores = this.mergeScores(currentScores, dbScores);
+
+      // 2. 合并contestants：保留多的
+      const currentContestants = currentData?.contestants || [];
+      const dbContestants = dbMatch.contestants || [];
+      const contestantSet = new Set([...currentContestants, ...dbContestants]);
+      const mergedContestants = Array.from(contestantSet);
+
+      // 3. 合并contestantNumbers：保留多的
+      const currentNumbers = currentData?.contestantNumbers || {};
+      const dbNumbers = dbMatch.contestantNumbers || {};
+      const mergedNumbers = { ...dbNumbers, ...currentNumbers };
+      // 确保所有contestants都有对应的number（如果没有则保留原有的）
+      mergedContestants.forEach((contestant) => {
+        if (!mergedNumbers[contestant]) {
+          // 如果当前数据中有，优先使用当前的
+          if (currentNumbers[contestant]) {
+            mergedNumbers[contestant] = currentNumbers[contestant];
+          } else if (dbNumbers[contestant]) {
+            mergedNumbers[contestant] = dbNumbers[contestant];
+          }
+        }
+      });
+
+      // 4. 更新版本号：先更新成数据库的版本，然后+1
+      const dbVersion = dbMatch.version || 1;
+      const newVersion = dbVersion + 1;
+      const now = Date.now();
+
+      const updateData = {
+        scores: mergedScores,
+        contestants: mergedContestants,
+        contestantNumbers: mergedNumbers,
+        version: newVersion,
+        updatedAt: now,
+      };
+
+      await dbInstance.collection("matches").doc(matchId).update({
+        data: updateData,
+      });
+
+      // 获取更新后的数据
+      const updated = await this.get(matchId);
+      return { success: true, version: newVersion, match: updated };
     },
   },
 
@@ -510,6 +565,28 @@ function getUserId() {
   });
 }
 
+// 日期格式化工具：将时间戳（number）转为标准日期格式（如 yyyy-MM-dd HH:mm:ss）
+function formatTime(timestamp) {
+  console.log(timestamp)
+  // 校验参数：如果不是有效数字，返回空字符串或默认提示
+  if (typeof timestamp !== "number" || isNaN(timestamp) || timestamp <= 0) {
+    return "未知时间";
+  }
+
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, "0"); // 月份从0开始，补零
+  const day = date.getDate().toString().padStart(2, "0"); // 日期补零
+  const hours = date.getHours().toString().padStart(2, "0"); // 小时补零
+  const minutes = date.getMinutes().toString().padStart(2, "0"); // 分钟补零
+  const seconds = date.getSeconds().toString().padStart(2, "0"); // 秒补零
+
+  // 可根据需求调整格式，例如：
+  // 简化格式：`${year}-${month}-${day}`
+  // 完整格式：`${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 module.exports = {
   db,
   createMatch,
@@ -517,4 +594,5 @@ module.exports = {
   refreshMatchData,
   getUserId,
   initCloud,
+  formatTime,
 };
