@@ -111,23 +111,101 @@ const db = {
           };
         }
 
+        // 处理特殊的数组操作
+        let finalUpdates = { ...updates };
+        let updatedMatch = { ...current };
+        let workingScores = [...(current.scores || [])];
+
+        // 处理 _addScores（用增量数据覆盖原始数据）
+        if (updates._addScores && Array.isArray(updates._addScores)) {
+          // 创建分数映射，用于快速查找
+          const scoreMap = new Map();
+          // 先添加所有原始分数
+          workingScores.forEach((score) => {
+            if (score?.contestant && score?.judge) {
+              const key = `${score.contestant}|${score.judge}`;
+              scoreMap.set(key, score);
+            }
+          });
+          
+          // 用增量数据覆盖（增量数据的 updatedAt 更大，所以覆盖）
+          updates._addScores.forEach((newScore) => {
+            if (newScore?.contestant && newScore?.judge) {
+              const key = `${newScore.contestant}|${newScore.judge}`;
+              const existing = scoreMap.get(key);
+              // 如果增量数据的 updatedAt 更大，或者不存在，则使用增量数据
+              if (!existing || (newScore.updatedAt || 0) >= (existing.updatedAt || 0)) {
+                scoreMap.set(key, newScore);
+              }
+            }
+          });
+          
+          // 转换回数组
+          workingScores = Array.from(scoreMap.values());
+          updatedMatch.scores = workingScores;
+          finalUpdates.scores = workingScores;
+          delete finalUpdates._addScores;
+        }
+
+        // 处理 _removeContestantScores（仅在真正需要删除选手时使用）
+        if (updates._removeContestantScores) {
+          const contestantsToRemove = Array.isArray(updates._removeContestantScores) 
+            ? updates._removeContestantScores 
+            : [updates._removeContestantScores];
+          // 删除这些选手的所有分数
+          workingScores = workingScores.filter(
+            (s) => !contestantsToRemove.includes(s?.contestant)
+          );
+          updatedMatch.scores = workingScores;
+          finalUpdates.scores = workingScores;
+          delete finalUpdates._removeContestantScores;
+        }
+
+        // 处理 _addContestant（添加选手）
+        if (updates._addContestant) {
+          const newContestants = Array.isArray(updates._addContestant)
+            ? updates._addContestant
+            : [updates._addContestant];
+          const existingContestants = current.contestants || [];
+          const contestantsToAdd = newContestants.filter(c => !existingContestants.includes(c));
+          if (contestantsToAdd.length > 0) {
+            updatedMatch.contestants = [...existingContestants, ...contestantsToAdd];
+            finalUpdates.contestants = updatedMatch.contestants;
+          }
+          delete finalUpdates._addContestant;
+        }
+
+        // 处理 _setContestantNumber（设置选手编号）
+        if (updates._setContestantNumber) {
+          updatedMatch.contestantNumbers = {
+            ...(current.contestantNumbers || {}),
+            ...updates._setContestantNumber,
+          };
+          finalUpdates.contestantNumbers = updatedMatch.contestantNumbers;
+          delete finalUpdates._setContestantNumber;
+        }
+
         // 更新数据（确保版本号总是更新）
         const newVersion = (current.version || 1) + 1;
         const now = Date.now();
 
-        const updateData = {
-          ...updates,
+        finalUpdates = {
+          ...finalUpdates,
           version: newVersion, // 每次更新都增加版本号
           updatedAt: now,
         };
 
+        // 同步更新本地对象
+        updatedMatch.version = newVersion;
+        updatedMatch.updatedAt = now;
+        Object.assign(updatedMatch, finalUpdates);
+
         await dbInstance.collection("matches").doc(id).update({
-          data: updateData,
+          data: finalUpdates,
         });
 
-        // 获取更新后的数据
-        const updated = await this.get(id);
-        return { success: true, version: newVersion, match: updated };
+        // 直接返回更新后的数据，避免再次查询数据库
+        return { success: true, version: newVersion, match: updatedMatch };
       } catch (e) {
         console.error("Update match error:", e);
         return { success: false, error: e.message || "Update failed" };

@@ -50,6 +50,7 @@ Component({
     newContestantNumber: "",
     canvasWidth: 750,
     canvasHeight: 1000,
+    isSaving: false, // 防止重复保存
   },
 
   // 【修复1：监听tableData变化，自动更新显示列表，并计算排名和格式化数据】
@@ -129,71 +130,64 @@ Component({
 
   methods: {
 
-    // 【修复4：handleModalSave中，保存成功后强制更新组件内数据，并处理版本冲突自动合并】
+    // 【增量更新：立即更新UI，后台异步同步到数据库】
     async handleModalSave() {
+      // 防止重复保存
+      if (this.data.isSaving) {
+        return;
+      }
+
       const { isAddMode, newContestantNumber, tempScores, selectedCell } =
         this.data;
-      const { matchId, judges, contestants, contestantNumbers, scores: currentScores } =
-        this.properties;
+      const { matchId, judges } = this.properties;
 
       if (!matchId) {
         wx.showToast({ title: "比赛ID异常，请重试", icon: "none" });
         return;
       }
 
-      // 管理员校验（原有逻辑保留）
+      this.setData({ isSaving: true });
+
+      // 1. 先关闭弹窗，提升用户体验
+      this.handleCellModalClose();
+
+      // 2. 管理员校验
       const { getUserId } = require("../../utils/db");
       try {
         const userId = await getUserId();
         const isAdmin = await db.roles.isAdmin(userId);
         if (!isAdmin) {
+          this.setData({ isSaving: false });
           wx.showToast({ title: "只有管理员可以操作", icon: "none" });
-          this.handleCellModalClose();
           return;
         }
       } catch (e) {
         console.error("权限校验失败:", e);
+        this.setData({ isSaving: false });
         wx.showToast({ title: "权限校验失败", icon: "none" });
         return;
       }
 
       try {
-        // 1. 先拉取数据库最新数据
-        let match = await db.matches.get(matchId);
-        if (!match) throw new Error("比赛不存在");
-
-        const currentVersion = this.properties.currentVersion || match.version || 1;
-        const dbVersion = match.version || 1;
-        let scores = [...(match.scores || [])];
         const now = Date.now();
+        let incrementalScores = [];
+        let incrementalContestants = [];
+        let incrementalContestantNumbers = {};
 
-        // 2. 如果数据库版本号高于当前版本，自动合并
-        if (dbVersion > currentVersion) {
-          const currentData = {
-            scores: currentScores || [],
-            contestants: contestants || [],
-            contestantNumbers: contestantNumbers || {},
-          };
-          const mergeResult = await db.matches.mergeMatchData(matchId, currentData, match);
-          if (mergeResult.success) {
-            match = mergeResult.match;
-            scores = [...(match.scores || [])];
-          }
-        }
-
-        // 3. 执行当前操作（添加或编辑选手）
         if (isAddMode) {
           // 添加选手逻辑
           const newContestantId = `contestant_${Date.now()}_${Math.random()
             .toString(36)
             .substr(2, 8)}`;
+          
+          // 构建新分数数组
           judges.forEach((judge) => {
             const numValue =
               tempScores[judge]?.trim() === ""
                 ? null
                 : parseFloat(tempScores[judge]) || null;
             if (numValue !== null) {
-              scores.push({
+              incrementalScores.push({
                 contestant: newContestantId,
                 judge,
                 value: numValue,
@@ -201,66 +195,22 @@ Component({
               });
             }
           });
-          // 提交更新
-          const updateResult = await db.matches.update(
-            matchId,
-            {
-              scores,
-              contestants: [...(match.contestants || []), newContestantId],
-              contestantNumbers: {
-                ...(match.contestantNumbers || {}),
-                [newContestantId]: newContestantNumber,
-              },
-            },
-            match.version
-          );
-          if (!updateResult.success && updateResult.error === "VERSION_CONFLICT") {
-            // 如果还有版本冲突，再次合并并重试
-            const latestMatch = await db.matches.get(matchId);
-            const currentData = {
-              scores: scores,
-              contestants: [...(match.contestants || []), newContestantId],
-              contestantNumbers: {
-                ...(match.contestantNumbers || {}),
-                [newContestantId]: newContestantNumber,
-              },
-            };
-            const mergeResult = await db.matches.mergeMatchData(matchId, currentData, latestMatch);
-            if (mergeResult.success) {
-              match = mergeResult.match;
-            } else {
-              throw new Error("合并失败");
-            }
-          } else if (!updateResult.success) {
-            throw new Error(updateResult.error || "更新失败");
-          } else {
-            match = updateResult.match;
-          }
+          
+          incrementalContestants = [newContestantId];
+          incrementalContestantNumbers = { [newContestantId]: newContestantNumber };
         } else {
           // 编辑选手逻辑
           const contestant = selectedCell?.contestant;
           if (!contestant) throw new Error("选手信息异常");
+          
+          // 构建更新的分数数组（先删除该选手的所有分数，再添加新分数）
           judges.forEach((judge) => {
             const numValue =
               tempScores[judge]?.trim() === ""
                 ? null
                 : parseFloat(tempScores[judge]) || null;
-            const scoreIndex = scores.findIndex(
-              (s) => s?.contestant === contestant && s?.judge === judge
-            );
-            if (scoreIndex !== -1) {
-              if (numValue !== null) {
-                scores[scoreIndex] = {
-                  contestant,
-                  judge,
-                  value: numValue,
-                  updatedAt: now,
-                };
-              } else {
-                scores.splice(scoreIndex, 1);
-              }
-            } else if (numValue !== null) {
-              scores.push({
+            if (numValue !== null) {
+              incrementalScores.push({
                 contestant,
                 judge,
                 value: numValue,
@@ -268,53 +218,25 @@ Component({
               });
             }
           });
-          const updateResult = await db.matches.update(matchId, { scores }, match.version);
-          if (!updateResult.success && updateResult.error === "VERSION_CONFLICT") {
-            // 如果还有版本冲突，再次合并并重试
-            const latestMatch = await db.matches.get(matchId);
-            const currentData = {
-              scores: scores,
-              contestants: match.contestants || [],
-              contestantNumbers: match.contestantNumbers || {},
-            };
-            const mergeResult = await db.matches.mergeMatchData(matchId, currentData, latestMatch);
-            if (mergeResult.success) {
-              match = mergeResult.match;
-            } else {
-              throw new Error("合并失败");
-            }
-          } else if (!updateResult.success) {
-            throw new Error(updateResult.error || "更新失败");
-          } else {
-            match = updateResult.match;
-          }
         }
 
-        // 4. 保存成功后，重新拉取最新数据并更新界面
-        const latestMatch = await db.matches.get(matchId);
-        this.setData(
-          {
-            // 同步最新的scores、contestants到properties（触发observer更新）
-            scores: latestMatch.scores || [],
-            contestants: latestMatch.contestants || [],
-          },
-          () => {
-            this.handleCellModalClose();
-            this.triggerEvent("update"); // 通知父页面刷新
-            wx.showToast({
-              title: isAddMode ? "添加成功" : "保存成功",
-              icon: "success",
-            });
-          }
-        );
+        // 3. 触发增量更新事件（立即更新UI，后台异步同步）
+        this.triggerEvent("incremental", {
+          scores: incrementalScores,
+          contestants: incrementalContestants,
+          contestantNumbers: incrementalContestantNumbers,
+          // 编辑时不需要删除，直接用增量覆盖
+        });
+
+        this.setData({ isSaving: false });
       } catch (error) {
         // 错误处理
         console.error(isAddMode ? "添加失败:" : "保存失败:", error);
+        this.setData({ isSaving: false });
         wx.showToast({
           title: isAddMode ? "添加失败，请重试" : "保存失败，请重试",
           icon: "none",
         });
-        this.handleCellModalClose();
       }
     },
 

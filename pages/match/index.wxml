@@ -35,6 +35,7 @@
     table-data="{{tableData}}"
     bind:update="loadMatchData"
     bind:refresh="handleRefresh"
+    bind:incremental="handleIncrementalUpdate"
   >
   </table-view>
 

@@ -46,7 +46,13 @@ Page({
       if (!userId) return;
 
       const isAdmin = await db.roles.isAdmin(userId);
-      this.setData({ isAdmin });
+      const oldIsAdmin = this.data.isAdmin;
+      this.setData({ isAdmin }, () => {
+        // 如果管理员状态发生变化，刷新列表
+        if (oldIsAdmin !== isAdmin) {
+          this.loadMatches();
+        }
+      });
     } catch (e) {
       console.error("Failed to check admin status:", e);
     }
@@ -164,12 +170,14 @@ Page({
         // 4. 验证通过，设置当前用户为管理员
         const { userId } = this.data;
         await db.roles.setAdmin(userId, trimmedPhone);
-        this.setData({ isAdmin: true, showAdminModal: false });
-        wx.showToast({
-          title: "管理员验证成功",
-          icon: "success",
+        // 设置管理员状态并刷新列表
+        this.setData({ isAdmin: true, showAdminModal: false }, () => {
+          this.loadMatches(); // 立即刷新列表
+          wx.showToast({
+            title: "管理员验证成功",
+            icon: "success",
+          });
         });
-        this.loadMatches();
       } else {
         wx.showToast({
           title: "管理员密钥不正确",
@@ -199,12 +207,14 @@ Page({
       const isValid = await db.masterKey.verify(masterKey.trim());
       if (isValid) {
         await db.roles.setAdmin(userId);
-        this.setData({ isAdmin: true, showMasterKeyModal: false });
-        wx.showToast({
-          title: "管理员验证成功",
-          icon: "success",
+        // 设置管理员状态并刷新列表
+        this.setData({ isAdmin: true, showMasterKeyModal: false }, () => {
+          this.loadMatches(); // 立即刷新列表
+          wx.showToast({
+            title: "管理员验证成功",
+            icon: "success",
+          });
         });
-        this.loadMatches();
       } else {
         wx.showToast({
           title: "万能密钥不正确",
